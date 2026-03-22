@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+:root {
+  --gold: #c89b3c;
+  --gold-light: #f0e6c0;
+  --dark-bg: #0a0a0f;
+  --panel-bg: #0d1117;
+  --panel-border: #1e2a3a;
+  --text-primary: #e8d5a3;
+  --text-secondary: #8a9bb0;
+  --blue-accent: #0bc4e3;
+  --red-accent: #c84b31;
+}
