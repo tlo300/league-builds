@@ -205,11 +205,19 @@ export default function Home() {
       {/* Header */}
       <header className="border-b border-[#1e2a3a] bg-[#0d1117] px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[#c89b3c] tracking-wide">
-              ⚔ League Builds
-            </h1>
-            <p className="text-xs text-[#8a9bb0] mt-0.5">Track your champion builds & strategies</p>
+          <div className="flex items-center gap-4">
+            <a
+              href="http://localhost:3000"
+              className="text-[#8a9bb0] hover:text-[#e8d5a3] text-sm transition-colors"
+            >
+              ← Hub
+            </a>
+            <div>
+              <h1 className="text-2xl font-bold text-[#c89b3c] tracking-wide">
+                ⚔ League Builds
+              </h1>
+              <p className="text-xs text-[#8a9bb0] mt-0.5">Track your champion builds & strategies</p>
+            </div>
           </div>
           <button
             onClick={() => { setShowForm(true); setEditingBuild(null); setForm(emptyForm); }}
