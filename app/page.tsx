@@ -117,6 +117,7 @@ export default function Home() {
   const [ddData, setDdData] = useState<DDragonData | null>(null);
   const [champModal, setChampModal] = useState<string | null>(null);
   const [champBuilds, setChampBuilds] = useState<Build[] | null>(null);
+  const [champRoleFilter, setChampRoleFilter] = useState("All");
 
   useEffect(() => {
     fetch("/api/ddragon").then((r) => r.json()).then(setDdData);
@@ -125,6 +126,7 @@ export default function Home() {
   const openChampModal = useCallback(async (champion: string) => {
     setChampModal(champion);
     setChampBuilds(null);
+    setChampRoleFilter("All");
     const params = new URLSearchParams({ champion });
     const res = await fetch(`/api/builds?${params.toString()}`);
     const data: Build[] = await res.json();
@@ -1243,110 +1245,218 @@ export default function Home() {
       )}
 
       {/* Champion builds modal */}
-      {champModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#0d1117] border border-[#1e2a3a] rounded-xl w-full max-w-lg max-h-[80vh] flex flex-col">
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-[#1e2a3a] flex items-center gap-3 shrink-0">
-              {ddData && (
+      {champModal && (() => {
+        const champKey = ddData?.championKeys[champModal] ?? champModal.replace(/[^a-zA-Z]/g, "");
+        const splashUrl = `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${champKey}_0.jpg`;
+        const filteredBuilds = champBuilds?.filter(b => champRoleFilter === "All" || b.role === champRoleFilter) ?? [];
+        const roles = champBuilds ? ["All", ...Array.from(new Set(champBuilds.map(b => b.role)))] : ["All"];
+        return (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#0d1117] border border-[#1e2a3a] rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+
+              {/* Splash header */}
+              <div className="relative shrink-0 h-44 overflow-hidden">
                 <img
-                  src={championIcon(ddData, champModal)}
+                  src={splashUrl}
                   alt={champModal}
-                  className="w-12 h-12 rounded-lg border border-[#c89b3c]/40"
+                  className="w-full h-full object-cover object-top"
                   onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
                 />
-              )}
-              <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-bold text-[#c89b3c]">{champModal}</h2>
-                <p className="text-xs text-[#8a9bb0]">Your builds · sorted by win rate</p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <a
-                  href={`https://www.op.gg/champions/${champModal.toLowerCase().replace(/[^a-z0-9]/g, "")}/builds`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-[#8a9bb0] hover:text-[#c89b3c] border border-[#1e2a3a] hover:border-[#c89b3c]/40 rounded px-2 py-1 transition-colors"
-                >
-                  OP.GG ↗
-                </a>
-                <button
-                  onClick={() => setChampModal(null)}
-                  className="text-[#8a9bb0] hover:text-[#e8d5a3] text-xl leading-none"
-                >
-                  &times;
-                </button>
-              </div>
-            </div>
+                {/* Gradient overlays */}
+                <div className="absolute inset-0 bg-gradient-to-r from-[#0d1117] via-[#0d1117]/40 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0d1117] via-transparent to-[#0d1117]/30" />
 
-            {/* Build list */}
-            <div className="overflow-y-auto p-4 space-y-2">
-              {champBuilds === null ? (
-                <div className="text-center text-[#8a9bb0] py-10">Loading...</div>
-              ) : champBuilds.length === 0 ? (
-                <div className="text-center text-[#8a9bb0] py-10">No builds saved for {champModal} yet.</div>
-              ) : champBuilds.map(build => (
-                <div
-                  key={build.id}
-                  onClick={() => { setSelectedBuild(build); setChampModal(null); }}
-                  className="bg-[#0a0a0f] border border-[#1e2a3a] rounded-lg p-3 cursor-pointer hover:border-[#c89b3c]/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${roleBg[build.role] ?? ""} ${roleColor[build.role] ?? ""}`}>
-                      {build.role}
-                    </span>
-                    {build.winRate != null ? (
-                      <span className={`text-sm font-bold ${build.winRate >= 50 ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>
-                        {build.winRate}% WR
-                      </span>
-                    ) : (
-                      <span className="text-xs text-[#4a5568]">No win rate</span>
-                    )}
+                {/* Champion info overlay */}
+                <div className="absolute inset-0 flex items-end px-6 pb-4 gap-4">
+                  {ddData && (
+                    <img
+                      src={championIcon(ddData, champModal)}
+                      alt={champModal}
+                      className="w-16 h-16 rounded-xl border-2 border-[#c89b3c]/60 shrink-0 shadow-lg"
+                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-3xl font-bold text-white drop-shadow-lg">{champModal}</h2>
+                    <p className="text-xs text-[#8a9bb0]">{champBuilds === null ? "Loading..." : `${champBuilds.length} build${champBuilds.length !== 1 ? "s" : ""} saved`}</p>
                   </div>
-
-                  {build.keystoneRune && (
-                    <div className="flex items-center gap-1.5 mb-2">
-                      {ddData && keystoneIcon(ddData, build.keystoneRune) && (
-                        <img
-                          src={keystoneIcon(ddData, build.keystoneRune)!}
-                          alt={build.keystoneRune}
-                          className="w-5 h-5 rounded-full"
-                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
-                      )}
-                      <span className="text-xs text-[#8a9bb0]">{build.keystoneRune}</span>
-                      {build.primaryRunePath && <span className="text-xs text-[#4a5568]">· {build.primaryRunePath}</span>}
-                    </div>
-                  )}
-
-                  {items(build).length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {items(build).map((item, i) => {
-                        const icon = item && ddData ? itemIcon(ddData, item) : null;
-                        return icon ? (
-                          <img
-                            key={i}
-                            src={icon}
-                            alt={item ?? ""}
-                            title={item ?? ""}
-                            className="w-7 h-7 rounded border border-[#1e2a3a]"
-                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                          />
-                        ) : (
-                          <span key={i} className="text-xs bg-[#1e2a3a] text-[#e8d5a3] px-1.5 py-0.5 rounded">{item}</span>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {build.notes && (
-                    <p className="text-xs text-[#8a9bb0] mt-2 line-clamp-1">{build.notes}</p>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0 self-start pt-1">
+                    <a
+                      href={`https://www.op.gg/champions/${champModal.toLowerCase().replace(/[^a-z0-9]/g, "")}/build`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-[#8a9bb0] hover:text-[#c89b3c] bg-[#0d1117]/80 border border-[#1e2a3a] hover:border-[#c89b3c]/40 rounded px-2 py-1 transition-colors backdrop-blur"
+                    >
+                      OP.GG ↗
+                    </a>
+                    <button
+                      onClick={() => setChampModal(null)}
+                      className="text-[#8a9bb0] hover:text-[#e8d5a3] text-xl leading-none bg-[#0d1117]/80 w-7 h-7 rounded flex items-center justify-center border border-[#1e2a3a] backdrop-blur"
+                    >
+                      &times;
+                    </button>
+                  </div>
                 </div>
-              ))}
+              </div>
+
+              {/* Role tabs */}
+              {roles.length > 2 && (
+                <div className="flex gap-1 px-5 py-3 border-b border-[#1e2a3a] shrink-0">
+                  {roles.map(role => (
+                    <button
+                      key={role}
+                      onClick={() => setChampRoleFilter(role)}
+                      className={`px-3 py-1.5 rounded text-xs font-semibold border transition-colors ${
+                        champRoleFilter === role
+                          ? role === "All"
+                            ? "bg-[#c89b3c] border-[#c89b3c] text-black"
+                            : `${roleBg[role] ?? ""} ${roleColor[role] ?? ""}`
+                          : "bg-transparent border-[#1e2a3a] text-[#8a9bb0] hover:border-[#c89b3c]/40"
+                      }`}
+                    >
+                      {role}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Build list */}
+              <div className="overflow-y-auto flex-1 p-5 space-y-4">
+                {champBuilds === null ? (
+                  <div className="text-center text-[#8a9bb0] py-12">Loading...</div>
+                ) : filteredBuilds.length === 0 ? (
+                  <div className="text-center text-[#8a9bb0] py-12">No {champRoleFilter === "All" ? "" : champRoleFilter + " "}builds saved for {champModal}.</div>
+                ) : filteredBuilds.map((build, idx) => {
+                  const buildItems = [build.item1, build.item2, build.item3, build.item4, build.item5, build.item6].filter(Boolean) as string[];
+                  return (
+                    <div
+                      key={build.id}
+                      onClick={() => { setSelectedBuild(build); setChampModal(null); }}
+                      className={`bg-[#0a0a0f] border rounded-xl p-5 cursor-pointer hover:border-[#c89b3c]/50 transition-all ${idx === 0 && champRoleFilter === "All" ? "border-[#c89b3c]/30" : "border-[#1e2a3a]"}`}
+                    >
+                      {/* Build header */}
+                      <div className="flex items-center gap-2 mb-4">
+                        {idx === 0 && champRoleFilter === "All" && (
+                          <span className="text-[0.6rem] font-bold bg-[#c89b3c] text-black px-1.5 py-0.5 rounded uppercase tracking-wider">Best</span>
+                        )}
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${roleBg[build.role] ?? ""} ${roleColor[build.role] ?? ""}`}>
+                          {build.role}
+                        </span>
+                        {build.winRate != null && (
+                          <span className={`text-sm font-bold ml-auto ${build.winRate >= 50 ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>
+                            {build.winRate}% WR
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex gap-6">
+                        {/* Left: Spells + Runes */}
+                        <div className="shrink-0">
+                          <div className="text-[0.6rem] text-[#4a5568] uppercase tracking-wider mb-2">Spells</div>
+                          <div className="flex gap-1.5 mb-4">
+                            {[build.summonerSpell1, build.summonerSpell2].map((spell, i) => {
+                              const icon = spell && ddData ? spellIcon(ddData, spell) : null;
+                              return spell ? (
+                                <div key={i} className="relative group">
+                                  {icon
+                                    ? <img src={icon} alt={spell} title={spell} className="w-9 h-9 rounded-lg border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                    : <div className="w-9 h-9 rounded-lg bg-[#1e2a3a] flex items-center justify-center text-[0.5rem] text-[#8a9bb0]">{spell}</div>
+                                  }
+                                </div>
+                              ) : null;
+                            })}
+                          </div>
+
+                          {build.keystoneRune && (
+                            <>
+                              <div className="text-[0.6rem] text-[#4a5568] uppercase tracking-wider mb-2">Runes</div>
+                              <div className="flex items-center gap-2">
+                                {/* Keystone */}
+                                {ddData && keystoneIcon(ddData, build.keystoneRune) ? (
+                                  <img
+                                    src={keystoneIcon(ddData, build.keystoneRune)!}
+                                    alt={build.keystoneRune}
+                                    title={build.keystoneRune}
+                                    className="w-11 h-11 rounded-full border border-[#c89b3c]/30"
+                                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                  />
+                                ) : null}
+                                <div className="flex flex-col gap-1">
+                                  {/* Primary path */}
+                                  {build.primaryRunePath && ddData && runePathIcon(ddData, build.primaryRunePath) ? (
+                                    <img
+                                      src={runePathIcon(ddData, build.primaryRunePath)!}
+                                      alt={build.primaryRunePath}
+                                      title={`Primary: ${build.primaryRunePath}`}
+                                      className="w-5 h-5 rounded"
+                                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                    />
+                                  ) : build.primaryRunePath ? <span className="text-[0.55rem] text-[#4a5568]">{build.primaryRunePath}</span> : null}
+                                  {/* Secondary path */}
+                                  {build.secondaryRunePath && ddData && runePathIcon(ddData, build.secondaryRunePath) ? (
+                                    <img
+                                      src={runePathIcon(ddData, build.secondaryRunePath)!}
+                                      alt={build.secondaryRunePath}
+                                      title={`Secondary: ${build.secondaryRunePath}`}
+                                      className="w-5 h-5 rounded opacity-60"
+                                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                    />
+                                  ) : build.secondaryRunePath ? <span className="text-[0.55rem] text-[#4a5568]">{build.secondaryRunePath}</span> : null}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Right: Items */}
+                        <div className="flex-1 min-w-0">
+                          {build.starterItem && (
+                            <div className="mb-3">
+                              <div className="text-[0.6rem] text-[#4a5568] uppercase tracking-wider mb-1.5">Starter</div>
+                              <div className="flex items-center gap-1">
+                                {(() => {
+                                  const icon = ddData ? itemIcon(ddData, build.starterItem) : null;
+                                  return icon
+                                    ? <img src={icon} alt={build.starterItem} title={build.starterItem} className="w-8 h-8 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                    : <span className="text-xs text-[#8a9bb0]">{build.starterItem}</span>;
+                                })()}
+                              </div>
+                            </div>
+                          )}
+
+                          {buildItems.length > 0 && (
+                            <div>
+                              <div className="text-[0.6rem] text-[#4a5568] uppercase tracking-wider mb-1.5">Core Build</div>
+                              <div className="flex items-center flex-wrap gap-1">
+                                {buildItems.map((item, i) => {
+                                  const icon = ddData ? itemIcon(ddData, item) : null;
+                                  return (
+                                    <div key={i} className="flex items-center gap-1">
+                                      {i > 0 && <span className="text-[#2a3a4a] text-xs">›</span>}
+                                      {icon
+                                        ? <img src={icon} alt={item} title={item} className="w-10 h-10 rounded-lg border border-[#1e2a3a] hover:border-[#c89b3c]/50 transition-colors" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                        : <div className="w-10 h-10 rounded-lg bg-[#1e2a3a] flex items-center justify-center text-[0.5rem] text-[#8a9bb0] text-center p-0.5">{item}</div>
+                                      }
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {build.notes && (
+                            <p className="text-xs text-[#8a9bb0] mt-3 line-clamp-2 leading-relaxed">{build.notes}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Build form modal */}
       {showForm && (
