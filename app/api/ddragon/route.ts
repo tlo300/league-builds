@@ -14,12 +14,14 @@ export async function GET() {
       fetch(`https://ddragon.leagueoflegends.com/cdn/${version}/data/en_US/runesReforged.json`, { next: { revalidate: 3600 } }).then((r) => r.json()),
     ]);
 
-    // Champions: display name → ddragon id (e.g. "Wukong" → "MonkeyKing")
+    // Champions: display name → ddragon id (e.g. "Wukong" → "MonkeyKing"), plus base stats
     const championKeys: Record<string, string> = {};
     const champions: string[] = [];
-    for (const champ of Object.values(champJson.data) as Array<{ name: string; id: string }>) {
+    const championStats: Record<string, { tags: string[]; hp: number; mp: number; movespeed: number; armor: number; spellblock: number; attackdamage: number; attackspeed: number }> = {};
+    for (const champ of Object.values(champJson.data) as Array<{ name: string; id: string; tags: string[]; stats: { hp: number; mp: number; movespeed: number; armor: number; spellblock: number; attackdamage: number; attackspeed: number } }>) {
       championKeys[champ.name] = champ.id;
       champions.push(champ.name);
+      championStats[champ.name] = { tags: champ.tags, hp: champ.stats.hp, mp: champ.stats.mp, movespeed: champ.stats.movespeed, armor: champ.stats.armor, spellblock: champ.stats.spellblock, attackdamage: champ.stats.attackdamage, attackspeed: champ.stats.attackspeed };
     }
     champions.sort();
 
@@ -50,10 +52,11 @@ export async function GET() {
     // Runes: keystones (slot 0 of each path), path icons, and full ID→icon map
     const keystoneIcons: Record<string, string> = {};
     const keystoneNames: string[] = [];
+    const keystoneDescs: Record<string, string> = {};
     const runePathIcons: Record<string, string> = {};
     const runePathNames: string[] = [];
     const runeIconsById: Record<number, string> = {};
-    for (const path of runeJson as Array<{ id: number; name: string; icon: string; slots: Array<{ runes: Array<{ id: number; name: string; icon: string }> }> }>) {
+    for (const path of runeJson as Array<{ id: number; name: string; icon: string; slots: Array<{ runes: Array<{ id: number; name: string; icon: string; shortDesc?: string }> }> }>) {
       runePathIcons[path.name] = path.icon;
       runePathNames.push(path.name);
       runeIconsById[path.id] = path.icon;
@@ -63,6 +66,7 @@ export async function GET() {
           if (slot === path.slots[0]) {
             keystoneIcons[rune.name] = rune.icon;
             keystoneNames.push(rune.name);
+            keystoneDescs[rune.name] = (rune.shortDesc ?? "").replace(/<[^>]+>/g, "");
           }
         }
       }
@@ -72,6 +76,7 @@ export async function GET() {
       version,
       champions,
       championKeys,
+      championStats,
       items: items.map((i) => ({ id: i.id, name: i.name, gold: i.gold, stats: i.stats, description: i.description })),
       itemIds,
       spellNames,
@@ -79,6 +84,7 @@ export async function GET() {
       spellIdKeys,
       keystoneNames,
       keystoneIcons,
+      keystoneDescs,
       runePathNames,
       runePathIcons,
       runeIconsById,
