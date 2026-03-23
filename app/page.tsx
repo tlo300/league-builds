@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { Build } from "@/db/schema";
-import { type DDragonData, championIcon, championIconByKey, spellIcon, spellIconById, itemIcon, itemIconById, keystoneIcon, runePathIcon } from "@/app/lib/ddragon";
+import { type DDragonData, championIcon, championIconByKey, spellIcon, spellIconById, itemIcon, itemIconById, keystoneIcon, runePathIcon, runeIconById } from "@/app/lib/ddragon";
 import type { LinkedAccount } from "@/db/schema";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
@@ -142,6 +142,52 @@ export default function Home() {
   const [rankData, setRankData] = useState<RankEntry[] | null>(null);
   const [rankHistory, setRankHistory] = useState<Record<string, HistoryPoint[]> | null>(null);
   const [historyQueue, setHistoryQueue] = useState<"RANKED_SOLO_5x5" | "RANKED_FLEX_SR">("RANKED_SOLO_5x5");
+  const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
+  const [matchDetail, setMatchDetail] = useState<MatchDetailData | null>(null);
+
+  type MatchParticipant = {
+    puuid: string;
+    isCurrentUser: boolean;
+    riotIdGameName: string;
+    riotIdTagline: string;
+    championName: string;
+    position: string;
+    level: number;
+    kills: number;
+    deaths: number;
+    assists: number;
+    cs: number;
+    goldEarned: number;
+    totalDamageDealt: number;
+    visionScore: number;
+    items: number[];
+    spell1Id: number;
+    spell2Id: number;
+    keystoneId: number;
+    primaryPathId: number;
+    secondaryPathId: number;
+    teamId: number;
+    win: boolean;
+    doubleKills: number;
+    tripleKills: number;
+    quadraKills: number;
+    pentaKills: number;
+    largestKillingSpree: number;
+    firstBloodKill: boolean;
+  };
+
+  type MatchDetailData = {
+    matchId: string;
+    queueName: string;
+    gameDuration: number;
+    gameCreation: number;
+    teams: Array<{
+      teamId: number;
+      win: boolean;
+      objectives: { baron: number; dragon: number; tower: number; riftHerald: number };
+      participants: MatchParticipant[];
+    }>;
+  };
 
   type RankEntry = {
     queueType: string;
@@ -235,6 +281,15 @@ export default function Home() {
     const histJson = await histRes.json();
     setRankHistory(typeof histJson === "object" && !Array.isArray(histJson) ? histJson : {});
   }, []);
+
+  const openMatchDetail = useCallback(async (matchId: string) => {
+    if (!matchModal) return;
+    setSelectedMatch(matchId);
+    setMatchDetail(null);
+    const res = await fetch(`/api/accounts/${matchModal.id}/matches/${matchId}`);
+    const data = await res.json();
+    if (res.ok) setMatchDetail(data);
+  }, [matchModal]);
 
   const REGIONS = [
     { value: "EUW1", label: "EUW" }, { value: "EUN1", label: "EUNE" },
@@ -867,12 +922,14 @@ export default function Home() {
                           strokeWidth={2}
                           dot={{ fill: "#c89b3c", r: 3, strokeWidth: 0 }}
                           activeDot={{ fill: "#e8d5a3", r: 4, strokeWidth: 0 }}
-                          label={({ x, y, value, index }) => {
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          label={(props: any) => {
+                            const { x, y, value, index } = props;
                             if (index !== 0 && index !== points.length - 1) return null;
                             const p = points[index];
                             return (
-                              <text x={x} y={y - 10} fill="#8a9bb0" fontSize={10} textAnchor="middle">
-                                {tierLabel(value)} {p.lp}LP
+                              <text x={x} y={Number(y) - 10} fill="#8a9bb0" fontSize={10} textAnchor="middle">
+                                {tierLabel(Number(value))} {p.lp}LP
                               </text>
                             );
                           }}
@@ -892,7 +949,8 @@ export default function Home() {
               ) : matches.map((m) => (
                 <div
                   key={m.matchId}
-                  className={`flex items-center gap-3 px-4 py-3 ${m.win ? "border-l-2 border-[#4a9e4a]" : "border-l-2 border-[#c84b31]"}`}
+                  onClick={() => openMatchDetail(m.matchId)}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#0a0a0f] transition-colors ${m.win ? "border-l-2 border-[#4a9e4a]" : "border-l-2 border-[#c84b31]"}`}
                 >
                   {/* Champion */}
                   <div className="relative shrink-0">
@@ -949,6 +1007,236 @@ export default function Home() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Match detail modal */}
+      {selectedMatch !== null && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+          <div className="bg-[#0d1117] border border-[#1e2a3a] rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="px-5 py-3 border-b border-[#1e2a3a] flex items-center gap-3 shrink-0">
+              {matchDetail ? (
+                <>
+                  <div className="flex-1">
+                    <span className="text-sm font-semibold text-[#e8d5a3]">{matchDetail.queueName}</span>
+                    <span className="text-[#4a5568] mx-2">·</span>
+                    <span className="text-sm text-[#8a9bb0]">{fmtDuration(matchDetail.gameDuration)}</span>
+                    <span className="text-[#4a5568] mx-2">·</span>
+                    <span className="text-xs text-[#4a5568]">{fmtDate(matchDetail.gameCreation)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 text-sm text-[#8a9bb0] animate-pulse">Loading match...</div>
+              )}
+              <button onClick={() => { setSelectedMatch(null); setMatchDetail(null); }} className="text-[#8a9bb0] hover:text-[#e8d5a3] text-xl shrink-0">&times;</button>
+            </div>
+
+            <div className="overflow-y-auto flex-1">
+              {!matchDetail ? (
+                <div className="text-center text-[#8a9bb0] py-16">Loading match details...</div>
+              ) : (() => {
+                const allParticipants = matchDetail.teams.flatMap(t => t.participants);
+                const me = allParticipants.find(p => p.isCurrentUser);
+                const maxDmg = Math.max(...allParticipants.map(p => p.totalDamageDealt), 1);
+
+                const multiKillBadge = (p: MatchParticipant) => {
+                  if (p.pentaKills > 0) return <span className="text-xs font-bold bg-[#c89b3c] text-black px-1.5 py-0.5 rounded ml-1">PENTA</span>;
+                  if (p.quadraKills > 0) return <span className="text-xs font-bold bg-[#9e4acf] text-white px-1.5 py-0.5 rounded ml-1">QUADRA</span>;
+                  if (p.tripleKills > 0) return <span className="text-xs font-bold bg-[#4a9ecf] text-white px-1.5 py-0.5 rounded ml-1">TRIPLE</span>;
+                  if (p.doubleKills > 0) return <span className="text-xs font-bold bg-[#4a9e4a] text-white px-1.5 py-0.5 rounded ml-1">DOUBLE</span>;
+                  return null;
+                };
+
+                return (
+                  <>
+                    {/* Hero card */}
+                    {me && (
+                      <div className={`px-5 py-4 border-b border-[#1e2a3a] ${me.win ? "bg-[#4a9e4a]/5" : "bg-[#c84b31]/5"}`}>
+                        <div className="flex items-center gap-4">
+                          {/* Champion portrait */}
+                          <div className="relative shrink-0">
+                            {ddData && (
+                              <img
+                                src={championIconByKey(ddData, me.championName)}
+                                alt={me.championName}
+                                className="w-20 h-20 rounded-xl border-2 border-[#c89b3c]/60"
+                                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                              />
+                            )}
+                            <span className="absolute -bottom-1 -right-1 bg-[#0a0a0f] border border-[#1e2a3a] text-[#8a9bb0] text-[0.6rem] font-bold px-1 rounded">{me.level}</span>
+                          </div>
+
+                          {/* Spells + Runes */}
+                          <div className="flex flex-col gap-1 shrink-0">
+                            <div className="flex gap-1">
+                              {[me.spell1Id, me.spell2Id].map((sid, i) => {
+                                const icon = ddData ? spellIconById(ddData, sid) : null;
+                                return icon ? <img key={i} src={icon} alt="" className="w-7 h-7 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div key={i} className="w-7 h-7 rounded bg-[#1e2a3a]" />;
+                              })}
+                            </div>
+                            <div className="flex gap-1">
+                              {[me.keystoneId, me.primaryPathId].map((rid, i) => {
+                                const icon = ddData ? runeIconById(ddData, rid) : null;
+                                return icon ? <img key={i} src={icon} alt="" className={`w-7 h-7 ${i === 0 ? "rounded-full border border-[#c89b3c]/40" : "rounded"}`} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div key={i} className="w-7 h-7 rounded bg-[#1e2a3a]" />;
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Name + KDA */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-base font-bold ${me.win ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>{me.win ? "Victory" : "Defeat"}</span>
+                              {multiKillBadge(me)}
+                              {me.firstBloodKill && <span className="text-xs font-bold bg-[#c84b31]/20 text-[#c84b31] border border-[#c84b31]/40 px-1.5 py-0.5 rounded ml-1">First Blood</span>}
+                            </div>
+                            <div className="text-3xl font-bold text-[#e8d5a3] tabular-nums">
+                              {me.kills} / <span className="text-[#c84b31]">{me.deaths}</span> / {me.assists}
+                            </div>
+                            <div className="text-xs text-[#8a9bb0] mt-0.5">
+                              {me.deaths === 0 ? "Perfect KDA" : `${((me.kills + me.assists) / me.deaths).toFixed(2)} KDA`}
+                              {me.position && <span className="ml-2">· {me.position}</span>}
+                            </div>
+                          </div>
+
+                          {/* Stats */}
+                          <div className="grid grid-cols-3 gap-x-6 gap-y-1 text-center shrink-0">
+                            <div><div className="text-sm font-bold text-[#e8d5a3]">{me.cs}</div><div className="text-[0.65rem] text-[#4a5568] uppercase tracking-wider">CS</div></div>
+                            <div><div className="text-sm font-bold text-[#e8d5a3]">{(me.goldEarned / 1000).toFixed(1)}k</div><div className="text-[0.65rem] text-[#4a5568] uppercase tracking-wider">Gold</div></div>
+                            <div><div className="text-sm font-bold text-[#e8d5a3]">{me.visionScore}</div><div className="text-[0.65rem] text-[#4a5568] uppercase tracking-wider">Vision</div></div>
+                            <div className="col-span-3"><div className="text-sm font-bold text-[#e8d5a3]">{(me.totalDamageDealt / 1000).toFixed(1)}k</div><div className="text-[0.65rem] text-[#4a5568] uppercase tracking-wider">Damage</div></div>
+                          </div>
+
+                          {/* Items */}
+                          <div className="flex flex-wrap gap-1 max-w-[168px] shrink-0">
+                            {me.items.map((id, i) => {
+                              const icon = ddData ? itemIconById(ddData, id) : null;
+                              return icon ? <img key={i} src={icon} alt="" className="w-9 h-9 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div key={i} className={`w-9 h-9 rounded ${id > 0 ? "bg-[#1e2a3a]" : ""}`} />;
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Team scoreboards */}
+                    {matchDetail.teams.map((team) => {
+                      const teamDmgMax = Math.max(...team.participants.map(p => p.totalDamageDealt), 1);
+                      return (
+                        <div key={team.teamId} className="border-b border-[#1e2a3a] last:border-0">
+                          {/* Team header */}
+                          <div className={`flex items-center gap-3 px-5 py-2 text-xs font-semibold uppercase tracking-wider ${team.win ? "text-[#4a9e4a] bg-[#4a9e4a]/5" : "text-[#c84b31] bg-[#c84b31]/5"}`}>
+                            <span>{team.win ? "Victory" : "Defeat"}</span>
+                            <span className="text-[#4a5568] font-normal normal-case tracking-normal">{team.teamId === 100 ? "Blue Team" : "Red Team"}</span>
+                            <div className="flex items-center gap-3 ml-auto text-[#4a5568] font-normal normal-case tracking-normal">
+                              {team.objectives.baron > 0 && <span>Baron ×{team.objectives.baron}</span>}
+                              {team.objectives.dragon > 0 && <span>Dragon ×{team.objectives.dragon}</span>}
+                              {team.objectives.riftHerald > 0 && <span>Herald ×{team.objectives.riftHerald}</span>}
+                              <span>Towers ×{team.objectives.tower}</span>
+                            </div>
+                          </div>
+
+                          {/* Column headers */}
+                          <div className="flex items-center gap-2 px-5 py-1 text-[0.6rem] text-[#4a5568] uppercase tracking-wider border-b border-[#1e2a3a]/50">
+                            <div className="w-8 shrink-0" />
+                            <div className="w-28 shrink-0">Player</div>
+                            <div className="flex gap-0.5 w-16 shrink-0" />
+                            <div className="w-16 shrink-0 text-center">KDA</div>
+                            <div className="w-9 shrink-0 text-center">CS</div>
+                            <div className="w-10 shrink-0 text-center">Gold</div>
+                            <div className="w-8 shrink-0 text-center">Vis</div>
+                            <div className="flex gap-0.5 shrink-0">Items</div>
+                            <div className="flex-1 text-right">Damage</div>
+                          </div>
+
+                          {/* Participant rows */}
+                          {team.participants.map((p) => (
+                            <div
+                              key={p.puuid}
+                              className={`flex items-center gap-2 px-5 py-2 text-xs border-b border-[#1e2a3a]/30 last:border-0 ${p.isCurrentUser ? "bg-[#c89b3c]/5 border-l-2 border-l-[#c89b3c]" : ""}`}
+                            >
+                              {/* Champion icon */}
+                              <div className="relative w-8 shrink-0">
+                                {ddData && (
+                                  <img
+                                    src={championIconByKey(ddData, p.championName)}
+                                    alt={p.championName}
+                                    className="w-8 h-8 rounded border border-[#1e2a3a]"
+                                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                  />
+                                )}
+                                <span className="absolute -bottom-0.5 -right-0.5 bg-[#0a0a0f] text-[#4a5568] text-[0.5rem] font-bold px-0.5 rounded leading-tight">{p.level}</span>
+                              </div>
+
+                              {/* Name */}
+                              <div className="w-28 shrink-0 min-w-0">
+                                <div className={`truncate font-medium ${p.isCurrentUser ? "text-[#c89b3c]" : "text-[#e8d5a3]"}`}>
+                                  {p.riotIdGameName || p.championName}
+                                  {multiKillBadge(p)}
+                                </div>
+                                <div className="text-[#4a5568] truncate">{p.position}</div>
+                              </div>
+
+                              {/* Spells + Keystone */}
+                              <div className="flex gap-0.5 w-16 shrink-0">
+                                <div className="flex flex-col gap-0.5">
+                                  {[p.spell1Id, p.spell2Id].map((sid, i) => {
+                                    const icon = ddData ? spellIconById(ddData, sid) : null;
+                                    return icon ? <img key={i} src={icon} alt="" className="w-5 h-5 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div key={i} className="w-5 h-5 rounded bg-[#1e2a3a]" />;
+                                  })}
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                  {[p.keystoneId, p.primaryPathId].map((rid, i) => {
+                                    const icon = ddData ? runeIconById(ddData, rid) : null;
+                                    return icon ? <img key={i} src={icon} alt="" className={`w-5 h-5 ${i === 0 ? "rounded-full" : "rounded"}`} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div key={i} className="w-5 h-5 rounded bg-[#1e2a3a]" />;
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* KDA */}
+                              <div className="w-16 shrink-0 text-center">
+                                <div className="font-medium text-[#e8d5a3] tabular-nums">{p.kills}/<span className="text-[#c84b31]">{p.deaths}</span>/{p.assists}</div>
+                                <div className="text-[#4a5568]">{p.deaths === 0 ? "Perf" : ((p.kills + p.assists) / p.deaths).toFixed(1)}</div>
+                              </div>
+
+                              {/* CS */}
+                              <div className="w-9 shrink-0 text-center text-[#8a9bb0] tabular-nums">{p.cs}</div>
+
+                              {/* Gold */}
+                              <div className="w-10 shrink-0 text-center text-[#c89b3c] tabular-nums">{(p.goldEarned / 1000).toFixed(1)}k</div>
+
+                              {/* Vision */}
+                              <div className="w-8 shrink-0 text-center text-[#8a9bb0] tabular-nums">{p.visionScore}</div>
+
+                              {/* Items */}
+                              <div className="flex gap-0.5 shrink-0">
+                                {p.items.map((id, i) => {
+                                  const icon = ddData ? itemIconById(ddData, id) : null;
+                                  return icon
+                                    ? <img key={i} src={icon} alt="" className="w-6 h-6 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                    : <div key={i} className={`w-6 h-6 rounded ${id > 0 ? "bg-[#1e2a3a]" : "border border-[#1e2a3a]/20"}`} />;
+                                })}
+                              </div>
+
+                              {/* Damage bar */}
+                              <div className="flex-1 text-right">
+                                <div className="text-[#8a9bb0] tabular-nums mb-0.5">{(p.totalDamageDealt / 1000).toFixed(1)}k</div>
+                                <div className="h-1.5 bg-[#1e2a3a] rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${p.win ? "bg-[#4a9e4a]" : "bg-[#c84b31]"}`}
+                                    style={{ width: `${(p.totalDamageDealt / teamDmgMax) * 100}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

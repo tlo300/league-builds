@@ -11,6 +11,7 @@ export type DDragonData = {
   keystoneIcons: Record<string, string>;
   runePathNames: string[];
   runePathIcons: Record<string, string>;
+  runeIconsById: Record<number, string>; // any rune/path numeric ID → icon path
 };
 
 const CDN = "https://ddragon.leagueoflegends.com/cdn";
@@ -49,6 +50,12 @@ export function championIconByKey(data: DDragonData, key: string): string {
 // For match history: Riot API returns numeric item IDs
 export function itemIconById(data: DDragonData, id: number): string | null {
   return id > 0 ? `${CDN}/${data.version}/img/item/${id}.png` : null;
+}
+
+// For match detail: rune/path icon by numeric ID from perks data
+export function runeIconById(data: DDragonData, id: number): string | null {
+  const path = data.runeIconsById[id];
+  return path ? `${RUNE_BASE}/${path}` : null;
 }
 
 // For match history: Riot API returns numeric summoner spell IDs

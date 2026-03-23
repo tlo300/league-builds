@@ -47,17 +47,24 @@ export async function GET() {
     }
     spellNames.sort();
 
-    // Runes: keystones (slot 0 of each path) and path icons
+    // Runes: keystones (slot 0 of each path), path icons, and full ID→icon map
     const keystoneIcons: Record<string, string> = {};
     const keystoneNames: string[] = [];
     const runePathIcons: Record<string, string> = {};
     const runePathNames: string[] = [];
-    for (const path of runeJson as Array<{ name: string; icon: string; slots: Array<{ runes: Array<{ name: string; icon: string }> }> }>) {
+    const runeIconsById: Record<number, string> = {};
+    for (const path of runeJson as Array<{ id: number; name: string; icon: string; slots: Array<{ runes: Array<{ id: number; name: string; icon: string }> }> }>) {
       runePathIcons[path.name] = path.icon;
       runePathNames.push(path.name);
-      for (const rune of path.slots[0].runes) {
-        keystoneIcons[rune.name] = rune.icon;
-        keystoneNames.push(rune.name);
+      runeIconsById[path.id] = path.icon;
+      for (const slot of path.slots) {
+        for (const rune of slot.runes) {
+          runeIconsById[rune.id] = rune.icon;
+          if (slot === path.slots[0]) {
+            keystoneIcons[rune.name] = rune.icon;
+            keystoneNames.push(rune.name);
+          }
+        }
       }
     }
 
@@ -74,6 +81,7 @@ export async function GET() {
       keystoneIcons,
       runePathNames,
       runePathIcons,
+      runeIconsById,
     });
   } catch {
     return Response.json({ error: "Failed to fetch Data Dragon" }, { status: 500 });
