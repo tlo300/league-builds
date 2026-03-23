@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { Build } from "@/db/schema";
 import { type DDragonData, championIcon, championIconByKey, spellIcon, spellIconById, itemIcon, itemIconById, keystoneIcon, runePathIcon } from "@/app/lib/ddragon";
 import type { LinkedAccount } from "@/db/schema";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 const CHAMPIONS = [
   "Aatrox","Ahri","Akali","Akshan","Alistar","Amumu","Anivia","Annie","Aphelios",
@@ -139,6 +140,8 @@ export default function Home() {
   const [matchModal, setMatchModal] = useState<LinkedAccount | null>(null);
   const [matches, setMatches] = useState<MatchSummary[] | null>(null);
   const [rankData, setRankData] = useState<RankEntry[] | null>(null);
+  const [rankHistory, setRankHistory] = useState<Record<string, HistoryPoint[]> | null>(null);
+  const [historyQueue, setHistoryQueue] = useState<"RANKED_SOLO_5x5" | "RANKED_FLEX_SR">("RANKED_SOLO_5x5");
 
   type RankEntry = {
     queueType: string;
@@ -147,6 +150,14 @@ export default function Home() {
     leaguePoints: number;
     wins: number;
     losses: number;
+  };
+
+  type HistoryPoint = {
+    date: string;
+    lpTotal: number;
+    tier: string;
+    rank: string;
+    lp: number;
   };
 
   type MatchSummary = {
@@ -211,6 +222,7 @@ export default function Home() {
     setMatchModal(account);
     setMatches(null);
     setRankData(null);
+    setRankHistory(null);
     const [matchRes, rankRes] = await Promise.all([
       fetch(`/api/accounts/${account.id}/matches`),
       fetch(`/api/accounts/${account.id}/rank`),
@@ -218,6 +230,10 @@ export default function Home() {
     const [matchJson, rankJson] = await Promise.all([matchRes.json(), rankRes.json()]);
     setMatches(Array.isArray(matchJson) ? matchJson : []);
     setRankData(Array.isArray(rankJson) ? rankJson : []);
+    // Fetch history after rank is saved (rank route saves today's snapshot first)
+    const histRes = await fetch(`/api/accounts/${account.id}/rank-history`);
+    const histJson = await histRes.json();
+    setRankHistory(typeof histJson === "object" && !Array.isArray(histJson) ? histJson : {});
   }, []);
 
   const REGIONS = [
@@ -787,6 +803,86 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {/* LP History chart */}
+            {rankHistory !== null && Object.keys(rankHistory).length > 0 && (() => {
+              const queues = Object.keys(rankHistory) as ("RANKED_SOLO_5x5" | "RANKED_FLEX_SR")[];
+              const activeQueue = queues.includes(historyQueue) ? historyQueue : queues[0];
+              const points = rankHistory[activeQueue] ?? [];
+              const TIER_ORDER = ["IRON","BRONZE","SILVER","GOLD","PLATINUM","EMERALD","DIAMOND","MASTER","GRANDMASTER","CHALLENGER"];
+              const tierLabel = (lpTotal: number) => {
+                const tierIdx = Math.min(Math.floor(lpTotal / 400), TIER_ORDER.length - 1);
+                const tier = TIER_ORDER[tierIdx];
+                if (tierIdx >= 7) return tier.charAt(0);
+                const div = ["IV","III","II","I"][Math.floor((lpTotal % 400) / 100)] ?? "I";
+                return `${tier.charAt(0)} ${div}`;
+              };
+              const tickValues = Array.from(new Set(points.map(p => Math.floor(p.lpTotal / 400) * 400))).flatMap(base => [base, base + 100, base + 200, base + 300]);
+              return (
+                <div className="px-5 pt-4 pb-2 border-b border-[#1e2a3a] shrink-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs text-[#8a9bb0] uppercase tracking-wider">LP History</span>
+                    {queues.length > 1 && (
+                      <div className="flex gap-1">
+                        {queues.map(q => (
+                          <button
+                            key={q}
+                            onClick={() => setHistoryQueue(q)}
+                            className={`text-xs px-2 py-0.5 rounded border transition-colors ${activeQueue === q ? "bg-[#c89b3c] border-[#c89b3c] text-black font-semibold" : "border-[#1e2a3a] text-[#8a9bb0] hover:border-[#c89b3c]/40"}`}
+                          >
+                            {q === "RANKED_SOLO_5x5" ? "Solo" : "Flex"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {points.length < 2 ? (
+                    <div className="text-xs text-[#4a5568] py-2">Open again tomorrow to start building history.</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={160}>
+                      <LineChart data={points} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
+                        <XAxis dataKey="date" tick={{ fill: "#4a5568", fontSize: 11 }} axisLine={false} tickLine={false} />
+                        <YAxis hide domain={["auto", "auto"]} />
+                        {tickValues.map(v => (
+                          <ReferenceLine key={v} y={v} stroke="#1e2a3a" strokeDasharray="3 3" />
+                        ))}
+                        <Tooltip
+                          cursor={{ stroke: "#c89b3c", strokeWidth: 1, strokeDasharray: "4 4" }}
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.[0]) return null;
+                            const p = payload[0].payload as HistoryPoint;
+                            const tierCap = p.tier.charAt(0) + p.tier.slice(1).toLowerCase();
+                            return (
+                              <div className="bg-[#0d1117] border border-[#1e2a3a] rounded px-2 py-1 text-xs">
+                                <div className="font-bold text-[#e8d5a3]">{tierCap} {p.rank}</div>
+                                <div className="text-[#c89b3c]">{p.lp} LP</div>
+                              </div>
+                            );
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="lpTotal"
+                          stroke="#c89b3c"
+                          strokeWidth={2}
+                          dot={{ fill: "#c89b3c", r: 3, strokeWidth: 0 }}
+                          activeDot={{ fill: "#e8d5a3", r: 4, strokeWidth: 0 }}
+                          label={({ x, y, value, index }) => {
+                            if (index !== 0 && index !== points.length - 1) return null;
+                            const p = points[index];
+                            return (
+                              <text x={x} y={y - 10} fill="#8a9bb0" fontSize={10} textAnchor="middle">
+                                {tierLabel(value)} {p.lp}LP
+                              </text>
+                            );
+                          }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="overflow-y-auto divide-y divide-[#1e2a3a]">
               {matches === null ? (

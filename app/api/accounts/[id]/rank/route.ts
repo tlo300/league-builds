@@ -1,9 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
-import { linkedAccounts } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { linkedAccounts, rankSnapshots } from "@/db/schema";
+import { and, eq, gte } from "drizzle-orm";
 
-// Summoner/League endpoints use the platform server, not routing region
 const PLATFORM: Record<string, string> = {
   NA1: "na1", BR1: "br1", LA1: "la1", LA2: "la2",
   EUW1: "euw1", EUN1: "eun1", TR1: "tr1", RU: "ru",
@@ -29,7 +28,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const platform = PLATFORM[account.region];
 
-  // Get ranked entries directly by puuid (Riot removed summonerId from summoner responses)
   const entriesRes = await fetch(
     `https://${platform}.api.riotgames.com/lol/league/v4/entries/by-puuid/${account.puuid}`,
     { headers: { "X-Riot-Token": apiKey } }
@@ -37,18 +35,35 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!entriesRes.ok) return Response.json({ error: "Failed to fetch rank" }, { status: 502 });
 
   const entries: Array<{
-    queueType: string;
-    tier: string;
-    rank: string;
-    leaguePoints: number;
-    wins: number;
-    losses: number;
+    queueType: string; tier: string; rank: string; leaguePoints: number; wins: number; losses: number;
   }> = await entriesRes.json();
 
-  // Return only Solo and Flex entries, sorted Solo first
   const ranked = entries
     .filter((e) => e.queueType === "RANKED_SOLO_5x5" || e.queueType === "RANKED_FLEX_SR")
     .sort((a) => (a.queueType === "RANKED_SOLO_5x5" ? -1 : 1));
+
+  // Save a snapshot for each queue (one per day — skip if already saved today)
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const existingToday = await db
+    .select()
+    .from(rankSnapshots)
+    .where(and(eq(rankSnapshots.accountId, account.id), gte(rankSnapshots.capturedAt, todayStart)));
+
+  const existingQueues = new Set(existingToday.map((s) => s.queueType));
+
+  for (const entry of ranked) {
+    if (!existingQueues.has(entry.queueType)) {
+      await db.insert(rankSnapshots).values({
+        accountId: account.id,
+        queueType: entry.queueType,
+        tier: entry.tier,
+        rank: entry.rank,
+        lp: entry.leaguePoints,
+      });
+    }
+  }
 
   return Response.json(ranked);
 }

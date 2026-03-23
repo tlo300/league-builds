@@ -38,3 +38,13 @@ export const linkedAccounts = pgTable("linked_accounts", {
 
 export type LinkedAccount = typeof linkedAccounts.$inferSelect;
 export type NewLinkedAccount = typeof linkedAccounts.$inferInsert;
+
+export const rankSnapshots = pgTable("rank_snapshots", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull(),
+  queueType: text("queue_type").notNull(),
+  tier: text("tier").notNull(),
+  rank: text("rank").notNull(),
+  lp: integer("lp").notNull(),
+  capturedAt: timestamp("captured_at").defaultNow().notNull(),
+});
