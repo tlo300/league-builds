@@ -29,18 +29,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const platform = PLATFORM[account.region];
 
-  // Get summonerId from puuid
-  const summonerRes = await fetch(
-    `https://${platform}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${account.puuid}`,
-    { headers: { "X-Riot-Token": apiKey } }
-  );
-  if (!summonerRes.ok) return Response.json({ error: "Summoner not found" }, { status: 502 });
-
-  const { id: summonerId } = await summonerRes.json();
-
-  // Get ranked entries
+  // Get ranked entries directly by puuid (Riot removed summonerId from summoner responses)
   const entriesRes = await fetch(
-    `https://${platform}.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}`,
+    `https://${platform}.api.riotgames.com/lol/league/v4/entries/by-puuid/${account.puuid}`,
     { headers: { "X-Riot-Token": apiKey } }
   );
   if (!entriesRes.ok) return Response.json({ error: "Failed to fetch rank" }, { status: 502 });
