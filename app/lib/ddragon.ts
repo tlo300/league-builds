@@ -1,17 +1,33 @@
+export type ChampionStats = {
+  tags: string[];
+  hp: number;
+  mp: number;
+  movespeed: number;
+  armor: number;
+  spellblock: number;
+  attackdamage: number;
+  attackspeed: number;
+};
+
 export type DDragonData = {
   version: string;
   champions: string[];
   championKeys: Record<string, string>;
+  championKeyToName: Record<string, string>; // ddragon key → display name (e.g. "MonkeyKing" → "Wukong")
+  championStats: Record<string, ChampionStats>;
   items: Array<{ id: number; name: string; gold?: number; stats?: Record<string, number>; description?: string }>;
   itemIds: Record<string, number>;
   spellNames: string[];
   spellKeys: Record<string, string>;
   spellIdKeys: Record<number, string>; // numeric spell ID → ddragon spell key
+  spellIdToName: Record<number, string>; // numeric spell ID → display name
   keystoneNames: string[];
   keystoneIcons: Record<string, string>;
+  keystoneDescs: Record<string, string>;
   runePathNames: string[];
   runePathIcons: Record<string, string>;
   runeIconsById: Record<number, string>; // any rune/path numeric ID → icon path
+  runeNamesById: Record<number, string>; // any rune/path numeric ID → display name
 };
 
 const CDN = "https://ddragon.leagueoflegends.com/cdn";

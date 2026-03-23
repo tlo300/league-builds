@@ -16,10 +16,12 @@ export async function GET() {
 
     // Champions: display name → ddragon id (e.g. "Wukong" → "MonkeyKing"), plus base stats
     const championKeys: Record<string, string> = {};
+    const championKeyToName: Record<string, string> = {};
     const champions: string[] = [];
     const championStats: Record<string, { tags: string[]; hp: number; mp: number; movespeed: number; armor: number; spellblock: number; attackdamage: number; attackspeed: number }> = {};
     for (const champ of Object.values(champJson.data) as Array<{ name: string; id: string; tags: string[]; stats: { hp: number; mp: number; movespeed: number; armor: number; spellblock: number; attackdamage: number; attackspeed: number } }>) {
       championKeys[champ.name] = champ.id;
+      championKeyToName[champ.id] = champ.name;
       champions.push(champ.name);
       championStats[champ.name] = { tags: champ.tags, hp: champ.stats.hp, mp: champ.stats.mp, movespeed: champ.stats.movespeed, armor: champ.stats.armor, spellblock: champ.stats.spellblock, attackdamage: champ.stats.attackdamage, attackspeed: champ.stats.attackspeed };
     }
@@ -39,9 +41,11 @@ export async function GET() {
     // Summoner spells available in Classic (SR) mode
     const spellKeys: Record<string, string> = {};
     const spellIdKeys: Record<number, string> = {};
+    const spellIdToName: Record<number, string> = {};
     const spellNames: string[] = [];
     for (const [key, spell] of Object.entries(spellJson.data) as Array<[string, { name: string; modes: string[]; key: string }]>) {
       spellIdKeys[Number(spell.key)] = key; // numeric ID → ddragon key (e.g. 4 → "SummonerFlash")
+      spellIdToName[Number(spell.key)] = spell.name;
       if (spell.modes?.includes("CLASSIC")) {
         spellKeys[spell.name] = key;
         spellNames.push(spell.name);
@@ -56,13 +60,16 @@ export async function GET() {
     const runePathIcons: Record<string, string> = {};
     const runePathNames: string[] = [];
     const runeIconsById: Record<number, string> = {};
+    const runeNamesById: Record<number, string> = {};
     for (const path of runeJson as Array<{ id: number; name: string; icon: string; slots: Array<{ runes: Array<{ id: number; name: string; icon: string; shortDesc?: string }> }> }>) {
       runePathIcons[path.name] = path.icon;
       runePathNames.push(path.name);
       runeIconsById[path.id] = path.icon;
+      runeNamesById[path.id] = path.name;
       for (const slot of path.slots) {
         for (const rune of slot.runes) {
           runeIconsById[rune.id] = rune.icon;
+          runeNamesById[rune.id] = rune.name;
           if (slot === path.slots[0]) {
             keystoneIcons[rune.name] = rune.icon;
             keystoneNames.push(rune.name);
@@ -76,18 +83,21 @@ export async function GET() {
       version,
       champions,
       championKeys,
+      championKeyToName,
       championStats,
       items: items.map((i) => ({ id: i.id, name: i.name, gold: i.gold, stats: i.stats, description: i.description })),
       itemIds,
       spellNames,
       spellKeys,
       spellIdKeys,
+      spellIdToName,
       keystoneNames,
       keystoneIcons,
       keystoneDescs,
       runePathNames,
       runePathIcons,
       runeIconsById,
+      runeNamesById,
     });
   } catch {
     return Response.json({ error: "Failed to fetch Data Dragon" }, { status: 500 });

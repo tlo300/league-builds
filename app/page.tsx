@@ -6,6 +6,8 @@ import { type DDragonData, championIcon, championIconByKey, spellIcon, spellIcon
 import type { LinkedAccount } from "@/db/schema";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { ItemPicker } from "@/app/components/ItemPicker";
+import { IconGridPicker, type GridItem } from "@/app/components/IconGridPicker";
+import { TipWrap, ItemTipWrap } from "@/app/components/TipWrap";
 
 const CHAMPIONS = [
   "Aatrox","Ahri","Akali","Akshan","Alistar","Amumu","Anivia","Annie","Aphelios",
@@ -454,12 +456,102 @@ export default function Home() {
   const items = (b: Build) =>
     [b.item1, b.item2, b.item3, b.item4, b.item5, b.item6].filter(Boolean);
 
+  // Look up full item entry by numeric ID (for match history tooltips)
+  const itemById = (id: number) => ddData?.items.find(i => i.id === id);
+  // Look up full item entry by name (for build detail tooltips)
+  const itemByName = (name: string) => ddData?.items.find(i => i.name === name);
+
   // Use DDragon data when loaded, fall back to hardcoded lists while loading
   const championList = ddData?.champions ?? CHAMPIONS;
   const spellList = ddData?.spellNames ?? SUMMONER_SPELLS;
   const keystoneList = ddData?.keystoneNames ?? KEYSTONE_RUNES;
   const runePathList = ddData?.runePathNames ?? RUNE_PATHS;
   const itemList = ddData?.items.map((i) => i.name) ?? COMMON_ITEMS;
+
+  // Pre-built GridItem arrays for icon pickers
+  const championGridItems: GridItem[] = championList.map(name => ({
+    value: name,
+    iconUrl: ddData ? championIcon(ddData, name) : null,
+  }));
+  const spellGridItems: GridItem[] = spellList.map(name => ({
+    value: name,
+    iconUrl: ddData ? spellIcon(ddData, name) : null,
+  }));
+  const keystoneGridItems: GridItem[] = keystoneList.map(name => ({
+    value: name,
+    iconUrl: ddData ? keystoneIcon(ddData, name) : null,
+  }));
+  const runePathGridItems: GridItem[] = runePathList.map(name => ({
+    value: name,
+    iconUrl: ddData ? runePathIcon(ddData, name) : null,
+  }));
+
+  // Champion tooltip: base stats + avg WR from saved builds
+  const renderChampionTooltip = useCallback((item: GridItem) => {
+    const stats = ddData?.championStats?.[item.value];
+    const champBuilds = builds.filter(b => b.champion === item.value && b.winRate != null);
+    const avgWR = champBuilds.length > 0
+      ? Math.round(champBuilds.reduce((sum, b) => sum + (b.winRate ?? 0), 0) / champBuilds.length)
+      : null;
+    return (
+      <div className="p-3">
+        <div className="text-sm font-bold text-[#c89b3c] mb-1.5">{item.value}</div>
+        {stats?.tags && (
+          <div className="flex gap-1 mb-2 flex-wrap">
+            {stats.tags.map(tag => (
+              <span key={tag} className="text-[0.6rem] bg-[#1e2a3a] text-[#8a9bb0] px-1.5 py-0.5 rounded">{tag}</span>
+            ))}
+          </div>
+        )}
+        {stats && (
+          <div className="space-y-0.5 text-xs">
+            <div className="flex justify-between gap-3"><span className="text-[#1caa60]">Health</span><span className="text-[#1caa60] font-semibold tabular-nums">{stats.hp}</span></div>
+            {stats.mp > 0 && <div className="flex justify-between gap-3"><span className="text-[#5eafd8]">Mana</span><span className="text-[#5eafd8] font-semibold tabular-nums">{stats.mp}</span></div>}
+            <div className="flex justify-between gap-3"><span className="text-[#c89b3c]">Attack Damage</span><span className="text-[#c89b3c] font-semibold tabular-nums">{stats.attackdamage}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-[#e8d5a3]">Attack Speed</span><span className="text-[#e8d5a3] font-semibold tabular-nums">{stats.attackspeed.toFixed(3)}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-[#c8d9a3]">Armor</span><span className="text-[#c8d9a3] font-semibold tabular-nums">{stats.armor}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-[#c89bd9]">Magic Resist</span><span className="text-[#c89bd9] font-semibold tabular-nums">{stats.spellblock}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-[#d0d0d0]">Move Speed</span><span className="text-[#d0d0d0] font-semibold tabular-nums">{stats.movespeed}</span></div>
+          </div>
+        )}
+        {avgWR !== null && (
+          <div className="mt-2 pt-2 border-t border-[#1e2a3a] text-xs flex items-center gap-1.5">
+            <span className="text-[#4a5568]">{champBuilds.length} build{champBuilds.length !== 1 ? "s" : ""}</span>
+            <span className="text-[#2a3a4a]">·</span>
+            <span className={avgWR >= 50 ? "text-[#4a9e4a]" : "text-[#c84b31]"}>{avgWR}% avg WR</span>
+          </div>
+        )}
+      </div>
+    );
+  }, [ddData, builds]);
+
+  // Keystone tooltip: name + short description
+  const renderKeystoneTooltip = useCallback((item: GridItem) => {
+    const desc = ddData?.keystoneDescs?.[item.value];
+    return (
+      <div className="p-3">
+        <div className="text-sm font-bold text-[#c89b3c] mb-1">{item.value}</div>
+        {desc && <div className="text-[0.65rem] text-[#8a9bb0] leading-relaxed">{desc}</div>}
+      </div>
+    );
+  }, [ddData]);
+
+  // Simple name-only tooltip (spells, rune paths)
+  const renderSimpleTooltip = useCallback((item: GridItem) => (
+    <div className="px-3 py-2">
+      <div className="text-sm font-bold text-[#c89b3c]">{item.value}</div>
+    </div>
+  ), []);
+
+  // Select champion and auto-fill win rate from existing builds
+  const handleChampionSelect = useCallback((champion: string) => {
+    if (!champion) { setForm(f => ({ ...f, champion: "" })); return; }
+    const champBuilds = builds.filter(b => b.champion === champion && b.winRate != null);
+    const avgWR = champBuilds.length > 0
+      ? Math.round(champBuilds.reduce((sum, b) => sum + (b.winRate ?? 0), 0) / champBuilds.length)
+      : null;
+    setForm(f => ({ ...f, champion, ...(avgWR !== null ? { winRate: avgWR.toString() } : {}) }));
+  }, [builds]);
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-[#e8d5a3]">
@@ -576,12 +668,14 @@ export default function Home() {
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
                       {ddData && (
-                        <img
-                          src={championIcon(ddData, build.champion)}
-                          alt={build.champion}
-                          className="w-10 h-10 rounded border border-[#1e2a3a]"
-                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
+                        <TipWrap label={build.champion}>
+                          <img
+                            src={championIcon(ddData, build.champion)}
+                            alt={build.champion}
+                            className="w-10 h-10 rounded border border-[#1e2a3a]"
+                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          />
+                        </TipWrap>
                       )}
                       <div>
                         <h3
@@ -653,12 +747,14 @@ export default function Home() {
             <div className="bg-[#0d1117] border border-[#c89b3c]/40 rounded-lg p-5 sticky top-6">
               <div className="flex items-center gap-3 mb-4">
                 {ddData && (
-                  <img
-                    src={championIcon(ddData, selectedBuild.champion)}
-                    alt={selectedBuild.champion}
-                    className="w-16 h-16 rounded-lg border border-[#c89b3c]/40 shrink-0"
-                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                  />
+                  <TipWrap label={selectedBuild.champion} className="shrink-0">
+                    <img
+                      src={championIcon(ddData, selectedBuild.champion)}
+                      alt={selectedBuild.champion}
+                      className="w-16 h-16 rounded-lg border border-[#c89b3c]/40"
+                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  </TipWrap>
                 )}
                 <div className="flex-1 min-w-0">
                   <h2
@@ -686,13 +782,14 @@ export default function Home() {
                         return spell ? (
                           <div key={i} className="flex items-center gap-1.5">
                             {icon ? (
-                              <img
-                                src={icon}
-                                alt={spell}
-                                title={spell}
-                                className="w-8 h-8 rounded border border-[#1e2a3a]"
-                                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                              />
+                              <TipWrap label={spell}>
+                                <img
+                                  src={icon}
+                                  alt={spell}
+                                  className="w-8 h-8 rounded border border-[#1e2a3a]"
+                                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                />
+                              </TipWrap>
                             ) : null}
                             <span className="text-xs text-[#e8d5a3]">{spell}</span>
                           </div>
@@ -707,39 +804,42 @@ export default function Home() {
                     <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1.5">Runes</div>
                     <div className="flex items-center gap-2">
                       {ddData && keystoneIcon(ddData, selectedBuild.keystoneRune) && (
-                        <img
-                          src={keystoneIcon(ddData, selectedBuild.keystoneRune)!}
-                          alt={selectedBuild.keystoneRune}
-                          title={selectedBuild.keystoneRune}
-                          className="w-8 h-8 rounded-full border border-[#1e2a3a]"
-                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
+                        <TipWrap label={selectedBuild.keystoneRune}>
+                          <img
+                            src={keystoneIcon(ddData, selectedBuild.keystoneRune)!}
+                            alt={selectedBuild.keystoneRune}
+                            className="w-8 h-8 rounded-full border border-[#1e2a3a]"
+                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          />
+                        </TipWrap>
                       )}
                       <div>
                         <div className="text-[#e8d5a3] font-medium text-sm">{selectedBuild.keystoneRune}</div>
                         {(selectedBuild.primaryRunePath || selectedBuild.secondaryRunePath) && (
                           <div className="flex items-center gap-1.5 mt-0.5">
                             {ddData && selectedBuild.primaryRunePath && runePathIcon(ddData, selectedBuild.primaryRunePath) && (
-                              <img
-                                src={runePathIcon(ddData, selectedBuild.primaryRunePath)!}
-                                alt={selectedBuild.primaryRunePath}
-                                title={selectedBuild.primaryRunePath}
-                                className="w-4 h-4"
-                                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                              />
+                              <TipWrap label={selectedBuild.primaryRunePath}>
+                                <img
+                                  src={runePathIcon(ddData, selectedBuild.primaryRunePath)!}
+                                  alt={selectedBuild.primaryRunePath}
+                                  className="w-4 h-4"
+                                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                />
+                              </TipWrap>
                             )}
                             <span className="text-[#8a9bb0] text-xs">{selectedBuild.primaryRunePath}</span>
                             {selectedBuild.secondaryRunePath && (
                               <>
                                 <span className="text-[#4a5568] text-xs">/</span>
                                 {ddData && runePathIcon(ddData, selectedBuild.secondaryRunePath) && (
-                                  <img
-                                    src={runePathIcon(ddData, selectedBuild.secondaryRunePath)!}
-                                    alt={selectedBuild.secondaryRunePath}
-                                    title={selectedBuild.secondaryRunePath}
-                                    className="w-4 h-4"
-                                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                                  />
+                                  <TipWrap label={selectedBuild.secondaryRunePath}>
+                                    <img
+                                      src={runePathIcon(ddData, selectedBuild.secondaryRunePath)!}
+                                      alt={selectedBuild.secondaryRunePath}
+                                      className="w-4 h-4"
+                                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                    />
+                                  </TipWrap>
                                 )}
                                 <span className="text-[#8a9bb0] text-xs">{selectedBuild.secondaryRunePath}</span>
                               </>
@@ -756,13 +856,14 @@ export default function Home() {
                     <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1.5">Starter</div>
                     <div className="flex items-center gap-2">
                       {ddData && itemIcon(ddData, selectedBuild.starterItem) && (
-                        <img
-                          src={itemIcon(ddData, selectedBuild.starterItem)!}
-                          alt={selectedBuild.starterItem}
-                          title={selectedBuild.starterItem}
-                          className="w-8 h-8 rounded border border-[#1e2a3a]"
-                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
+                        <ItemTipWrap item={itemByName(selectedBuild.starterItem)}>
+                          <img
+                            src={itemIcon(ddData, selectedBuild.starterItem)!}
+                            alt={selectedBuild.starterItem}
+                            className="w-8 h-8 rounded border border-[#1e2a3a]"
+                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          />
+                        </ItemTipWrap>
                       )}
                       <span className="text-[#e8d5a3] text-sm">{selectedBuild.starterItem}</span>
                     </div>
@@ -776,27 +877,29 @@ export default function Home() {
                       {items(selectedBuild).map((item, i) => {
                         const icon = item && ddData ? itemIcon(ddData, item) : null;
                         return (
-                          <div key={i} title={item ?? undefined} className="flex flex-col items-center gap-0.5">
-                            {icon ? (
-                              <img
-                                src={icon}
-                                alt={item ?? ""}
-                                className="w-10 h-10 rounded border border-[#1e2a3a] hover:border-[#c89b3c]/60 transition-colors"
-                                onError={(e) => {
-                                  const el = e.target as HTMLImageElement;
-                                  el.style.display = "none";
-                                  const fallback = el.nextElementSibling as HTMLElement | null;
-                                  if (fallback) fallback.style.display = "flex";
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className="w-10 h-10 rounded border border-[#1e2a3a] bg-[#1e2a3a] items-center justify-center text-xs text-[#e8d5a3] text-center leading-tight p-0.5"
-                              style={{ display: icon ? "none" : "flex" }}
-                            >
-                              {item}
+                          <ItemTipWrap key={i} item={itemByName(item ?? "")}>
+                            <div className="flex flex-col items-center gap-0.5">
+                              {icon ? (
+                                <img
+                                  src={icon}
+                                  alt={item ?? ""}
+                                  className="w-10 h-10 rounded border border-[#1e2a3a] hover:border-[#c89b3c]/60 transition-colors"
+                                  onError={(e) => {
+                                    const el = e.target as HTMLImageElement;
+                                    el.style.display = "none";
+                                    const fallback = el.nextElementSibling as HTMLElement | null;
+                                    if (fallback) fallback.style.display = "flex";
+                                  }}
+                                />
+                              ) : null}
+                              <div
+                                className="w-10 h-10 rounded border border-[#1e2a3a] bg-[#1e2a3a] items-center justify-center text-xs text-[#e8d5a3] text-center leading-tight p-0.5"
+                                style={{ display: icon ? "none" : "flex" }}
+                              >
+                                {item}
+                              </div>
                             </div>
-                          </div>
+                          </ItemTipWrap>
                         );
                       })}
                     </div>
@@ -1032,12 +1135,14 @@ export default function Home() {
                   {/* Champion */}
                   <div className="relative shrink-0">
                     {ddData ? (
-                      <img
-                        src={championIconByKey(ddData, m.championName)}
-                        alt={m.championName}
-                        className="w-12 h-12 rounded-lg border border-[#1e2a3a]"
-                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
+                      <TipWrap label={ddData.championKeyToName?.[m.championName] ?? m.championName}>
+                        <img
+                          src={championIconByKey(ddData, m.championName)}
+                          alt={m.championName}
+                          className="w-12 h-12 rounded-lg border border-[#1e2a3a]"
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      </TipWrap>
                     ) : <div className="w-12 h-12 rounded-lg bg-[#1e2a3a]" />}
                   </div>
 
@@ -1045,8 +1150,11 @@ export default function Home() {
                   <div className="flex flex-col gap-1 shrink-0">
                     {[m.spell1Id, m.spell2Id].map((sid, i) => {
                       const icon = ddData ? spellIconById(ddData, sid) : null;
+                      const name = ddData?.spellIdToName?.[sid] ?? "";
                       return icon ? (
-                        <img key={i} src={icon} alt="" className="w-5 h-5 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        <TipWrap key={i} label={name}>
+                          <img src={icon} alt={name} className="w-5 h-5 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        </TipWrap>
                       ) : <div key={i} className="w-5 h-5 rounded bg-[#1e2a3a]" />;
                     })}
                   </div>
@@ -1072,7 +1180,9 @@ export default function Home() {
                     {m.items.map((id, i) => {
                       const icon = ddData ? itemIconById(ddData, id) : null;
                       return icon ? (
-                        <img key={i} src={icon} alt="" className="w-7 h-7 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        <ItemTipWrap key={i} item={itemById(id)}>
+                          <img src={icon} alt="" className="w-7 h-7 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        </ItemTipWrap>
                       ) : null;
                     })}
                   </div>
@@ -1136,12 +1246,14 @@ export default function Home() {
                           {/* Champion portrait */}
                           <div className="relative shrink-0">
                             {ddData && (
-                              <img
-                                src={championIconByKey(ddData, me.championName)}
-                                alt={me.championName}
-                                className="w-20 h-20 rounded-xl border-2 border-[#c89b3c]/60"
-                                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                              />
+                              <TipWrap label={ddData.championKeyToName?.[me.championName] ?? me.championName}>
+                                <img
+                                  src={championIconByKey(ddData, me.championName)}
+                                  alt={me.championName}
+                                  className="w-20 h-20 rounded-xl border-2 border-[#c89b3c]/60"
+                                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                />
+                              </TipWrap>
                             )}
                             <span className="absolute -bottom-1 -right-1 bg-[#0a0a0f] border border-[#1e2a3a] text-[#8a9bb0] text-[0.6rem] font-bold px-1 rounded">{me.level}</span>
                           </div>
@@ -1151,13 +1263,15 @@ export default function Home() {
                             <div className="flex gap-1">
                               {[me.spell1Id, me.spell2Id].map((sid, i) => {
                                 const icon = ddData ? spellIconById(ddData, sid) : null;
-                                return icon ? <img key={i} src={icon} alt="" className="w-7 h-7 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div key={i} className="w-7 h-7 rounded bg-[#1e2a3a]" />;
+                                const name = ddData?.spellIdToName?.[sid] ?? "";
+                                return icon ? <TipWrap key={i} label={name}><img src={icon} alt={name} className="w-7 h-7 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /></TipWrap> : <div key={i} className="w-7 h-7 rounded bg-[#1e2a3a]" />;
                               })}
                             </div>
                             <div className="flex gap-1">
                               {[me.keystoneId, me.primaryPathId].map((rid, i) => {
                                 const icon = ddData ? runeIconById(ddData, rid) : null;
-                                return icon ? <img key={i} src={icon} alt="" className={`w-7 h-7 ${i === 0 ? "rounded-full border border-[#c89b3c]/40" : "rounded"}`} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div key={i} className="w-7 h-7 rounded bg-[#1e2a3a]" />;
+                                const name = ddData?.runeNamesById?.[rid] ?? "";
+                                return icon ? <TipWrap key={i} label={name}><img src={icon} alt={name} className={`w-7 h-7 ${i === 0 ? "rounded-full border border-[#c89b3c]/40" : "rounded"}`} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /></TipWrap> : <div key={i} className="w-7 h-7 rounded bg-[#1e2a3a]" />;
                               })}
                             </div>
                           </div>
@@ -1190,7 +1304,11 @@ export default function Home() {
                           <div className="flex flex-wrap gap-1 max-w-[168px] shrink-0">
                             {me.items.map((id, i) => {
                               const icon = ddData ? itemIconById(ddData, id) : null;
-                              return icon ? <img key={i} src={icon} alt="" className="w-9 h-9 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div key={i} className={`w-9 h-9 rounded ${id > 0 ? "bg-[#1e2a3a]" : ""}`} />;
+                              return icon ? (
+                                <ItemTipWrap key={i} item={itemById(id)}>
+                                  <img src={icon} alt="" className="w-9 h-9 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                </ItemTipWrap>
+                              ) : <div key={i} className={`w-9 h-9 rounded ${id > 0 ? "bg-[#1e2a3a]" : ""}`} />;
                             })}
                           </div>
                         </div>
@@ -1236,12 +1354,14 @@ export default function Home() {
                               {/* Champion icon */}
                               <div className="relative w-8 shrink-0">
                                 {ddData && (
-                                  <img
-                                    src={championIconByKey(ddData, p.championName)}
-                                    alt={p.championName}
-                                    className="w-8 h-8 rounded border border-[#1e2a3a]"
-                                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                                  />
+                                  <TipWrap label={ddData.championKeyToName?.[p.championName] ?? p.championName}>
+                                    <img
+                                      src={championIconByKey(ddData, p.championName)}
+                                      alt={p.championName}
+                                      className="w-8 h-8 rounded border border-[#1e2a3a]"
+                                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                    />
+                                  </TipWrap>
                                 )}
                                 <span className="absolute -bottom-0.5 -right-0.5 bg-[#0a0a0f] text-[#4a5568] text-[0.5rem] font-bold px-0.5 rounded leading-tight">{p.level}</span>
                               </div>
@@ -1260,13 +1380,15 @@ export default function Home() {
                                 <div className="flex flex-col gap-0.5">
                                   {[p.spell1Id, p.spell2Id].map((sid, i) => {
                                     const icon = ddData ? spellIconById(ddData, sid) : null;
-                                    return icon ? <img key={i} src={icon} alt="" className="w-5 h-5 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div key={i} className="w-5 h-5 rounded bg-[#1e2a3a]" />;
+                                    const name = ddData?.spellIdToName?.[sid] ?? "";
+                                    return icon ? <TipWrap key={i} label={name}><img src={icon} alt={name} className="w-5 h-5 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /></TipWrap> : <div key={i} className="w-5 h-5 rounded bg-[#1e2a3a]" />;
                                   })}
                                 </div>
                                 <div className="flex flex-col gap-0.5">
                                   {[p.keystoneId, p.primaryPathId].map((rid, i) => {
                                     const icon = ddData ? runeIconById(ddData, rid) : null;
-                                    return icon ? <img key={i} src={icon} alt="" className={`w-5 h-5 ${i === 0 ? "rounded-full" : "rounded"}`} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div key={i} className="w-5 h-5 rounded bg-[#1e2a3a]" />;
+                                    const name = ddData?.runeNamesById?.[rid] ?? "";
+                                    return icon ? <TipWrap key={i} label={name}><img src={icon} alt={name} className={`w-5 h-5 ${i === 0 ? "rounded-full" : "rounded"}`} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /></TipWrap> : <div key={i} className="w-5 h-5 rounded bg-[#1e2a3a]" />;
                                   })}
                                 </div>
                               </div>
@@ -1291,7 +1413,7 @@ export default function Home() {
                                 {p.items.map((id, i) => {
                                   const icon = ddData ? itemIconById(ddData, id) : null;
                                   return icon
-                                    ? <img key={i} src={icon} alt="" className="w-6 h-6 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                    ? <ItemTipWrap key={i} item={itemById(id)}><img src={icon} alt="" className="w-6 h-6 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /></ItemTipWrap>
                                     : <div key={i} className={`w-6 h-6 rounded ${id > 0 ? "bg-[#1e2a3a]" : "border border-[#1e2a3a]/20"}`} />;
                                 })}
                               </div>
@@ -1490,9 +1612,9 @@ export default function Home() {
                             {[build.summonerSpell1, build.summonerSpell2].map((spell, i) => {
                               const icon = spell && ddData ? spellIcon(ddData, spell) : null;
                               return spell ? (
-                                <div key={i} className="relative group">
+                                <div key={i}>
                                   {icon
-                                    ? <img src={icon} alt={spell} title={spell} className="w-9 h-9 rounded-lg border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                    ? <TipWrap label={spell}><img src={icon} alt={spell} className="w-9 h-9 rounded-lg border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /></TipWrap>
                                     : <div className="w-9 h-9 rounded-lg bg-[#1e2a3a] flex items-center justify-center text-[0.5rem] text-[#8a9bb0]">{spell}</div>
                                   }
                                 </div>
@@ -1506,34 +1628,37 @@ export default function Home() {
                               <div className="flex items-center gap-2">
                                 {/* Keystone */}
                                 {ddData && keystoneIcon(ddData, build.keystoneRune) ? (
-                                  <img
-                                    src={keystoneIcon(ddData, build.keystoneRune)!}
-                                    alt={build.keystoneRune}
-                                    title={build.keystoneRune}
-                                    className="w-11 h-11 rounded-full border border-[#c89b3c]/30"
-                                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                                  />
+                                  <TipWrap label={build.keystoneRune}>
+                                    <img
+                                      src={keystoneIcon(ddData, build.keystoneRune)!}
+                                      alt={build.keystoneRune}
+                                      className="w-11 h-11 rounded-full border border-[#c89b3c]/30"
+                                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                    />
+                                  </TipWrap>
                                 ) : null}
                                 <div className="flex flex-col gap-1">
                                   {/* Primary path */}
                                   {build.primaryRunePath && ddData && runePathIcon(ddData, build.primaryRunePath) ? (
-                                    <img
-                                      src={runePathIcon(ddData, build.primaryRunePath)!}
-                                      alt={build.primaryRunePath}
-                                      title={`Primary: ${build.primaryRunePath}`}
-                                      className="w-5 h-5 rounded"
-                                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                                    />
+                                    <TipWrap label={build.primaryRunePath}>
+                                      <img
+                                        src={runePathIcon(ddData, build.primaryRunePath)!}
+                                        alt={build.primaryRunePath}
+                                        className="w-5 h-5 rounded"
+                                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                      />
+                                    </TipWrap>
                                   ) : build.primaryRunePath ? <span className="text-[0.55rem] text-[#4a5568]">{build.primaryRunePath}</span> : null}
                                   {/* Secondary path */}
                                   {build.secondaryRunePath && ddData && runePathIcon(ddData, build.secondaryRunePath) ? (
-                                    <img
-                                      src={runePathIcon(ddData, build.secondaryRunePath)!}
-                                      alt={build.secondaryRunePath}
-                                      title={`Secondary: ${build.secondaryRunePath}`}
-                                      className="w-5 h-5 rounded opacity-60"
-                                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                                    />
+                                    <TipWrap label={build.secondaryRunePath}>
+                                      <img
+                                        src={runePathIcon(ddData, build.secondaryRunePath)!}
+                                        alt={build.secondaryRunePath}
+                                        className="w-5 h-5 rounded opacity-60"
+                                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                      />
+                                    </TipWrap>
                                   ) : build.secondaryRunePath ? <span className="text-[0.55rem] text-[#4a5568]">{build.secondaryRunePath}</span> : null}
                                 </div>
                               </div>
@@ -1550,7 +1675,7 @@ export default function Home() {
                                 {(() => {
                                   const icon = ddData ? itemIcon(ddData, build.starterItem) : null;
                                   return icon
-                                    ? <img src={icon} alt={build.starterItem} title={build.starterItem} className="w-8 h-8 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                    ? <ItemTipWrap item={itemByName(build.starterItem)}><img src={icon} alt={build.starterItem} className="w-8 h-8 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /></ItemTipWrap>
                                     : <span className="text-xs text-[#8a9bb0]">{build.starterItem}</span>;
                                 })()}
                               </div>
@@ -1567,7 +1692,7 @@ export default function Home() {
                                     <div key={i} className="flex items-center gap-1">
                                       {i > 0 && <span className="text-[#2a3a4a] text-xs">›</span>}
                                       {icon
-                                        ? <img src={icon} alt={item} title={item} className="w-10 h-10 rounded-lg border border-[#1e2a3a] hover:border-[#c89b3c]/50 transition-colors" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                        ? <ItemTipWrap item={itemByName(item)}><img src={icon} alt={item} className="w-10 h-10 rounded-lg border border-[#1e2a3a] hover:border-[#c89b3c]/50 transition-colors" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /></ItemTipWrap>
                                         : <div className="w-10 h-10 rounded-lg bg-[#1e2a3a] flex items-center justify-center text-[0.5rem] text-[#8a9bb0] text-center p-0.5">{item}</div>
                                       }
                                     </div>
@@ -1619,15 +1744,17 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Champion *</label>
-                  <select
-                    required
+                  <IconGridPicker
                     value={form.champion}
-                    onChange={e => setForm(f => ({ ...f, champion: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
-                  >
-                    <option value="">Select champion...</option>
-                    {championList.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                    onChange={handleChampionSelect}
+                    items={championGridItems}
+                    placeholder="Select champion..."
+                    showSearch
+                    columns={8}
+                    panelWidth={400}
+                    required
+                    renderTooltipContent={renderChampionTooltip}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Role *</label>
@@ -1646,23 +1773,27 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Summoner Spell 1</label>
-                  <select
+                  <IconGridPicker
                     value={form.summonerSpell1}
-                    onChange={e => setForm(f => ({ ...f, summonerSpell1: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
-                  >
-                    {spellList.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                    onChange={v => setForm(f => ({ ...f, summonerSpell1: v }))}
+                    items={spellGridItems}
+                    placeholder="Select spell..."
+                    columns={5}
+                    panelWidth={268}
+                    renderTooltipContent={renderSimpleTooltip}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Summoner Spell 2</label>
-                  <select
+                  <IconGridPicker
                     value={form.summonerSpell2}
-                    onChange={e => setForm(f => ({ ...f, summonerSpell2: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
-                  >
-                    {spellList.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                    onChange={v => setForm(f => ({ ...f, summonerSpell2: v }))}
+                    items={spellGridItems}
+                    placeholder="Select spell..."
+                    columns={5}
+                    panelWidth={268}
+                    renderTooltipContent={renderSimpleTooltip}
+                  />
                 </div>
               </div>
 
@@ -1670,36 +1801,39 @@ export default function Home() {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Keystone</label>
-                  <select
+                  <IconGridPicker
                     value={form.keystoneRune}
-                    onChange={e => setForm(f => ({ ...f, keystoneRune: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
-                  >
-                    <option value="">Select...</option>
-                    {keystoneList.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                    onChange={v => setForm(f => ({ ...f, keystoneRune: v }))}
+                    items={keystoneGridItems}
+                    placeholder="Select..."
+                    columns={5}
+                    panelWidth={268}
+                    renderTooltipContent={renderKeystoneTooltip}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Primary Path</label>
-                  <select
+                  <IconGridPicker
                     value={form.primaryRunePath}
-                    onChange={e => setForm(f => ({ ...f, primaryRunePath: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
-                  >
-                    <option value="">Select...</option>
-                    {runePathList.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                    onChange={v => setForm(f => ({ ...f, primaryRunePath: v }))}
+                    items={runePathGridItems}
+                    placeholder="Select..."
+                    columns={5}
+                    panelWidth={268}
+                    renderTooltipContent={renderSimpleTooltip}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Secondary Path</label>
-                  <select
+                  <IconGridPicker
                     value={form.secondaryRunePath}
-                    onChange={e => setForm(f => ({ ...f, secondaryRunePath: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
-                  >
-                    <option value="">Select...</option>
-                    {runePathList.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                    onChange={v => setForm(f => ({ ...f, secondaryRunePath: v }))}
+                    items={runePathGridItems}
+                    placeholder="Select..."
+                    columns={5}
+                    panelWidth={268}
+                    renderTooltipContent={renderSimpleTooltip}
+                  />
                 </div>
               </div>
 
@@ -1721,19 +1855,14 @@ export default function Home() {
               </div>
 
               {/* Starter + Win Rate */}
-              <datalist id="items-list">
-                {itemList.map(item => <option key={item} value={item} />)}
-              </datalist>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Starter Item</label>
-                  <input
-                    type="text"
-                    list="items-list"
-                    placeholder="e.g. Doran's Blade"
+                  <ItemPicker
                     value={form.starterItem}
-                    onChange={e => setForm(f => ({ ...f, starterItem: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] placeholder-[#4a5568] focus:outline-none focus:border-[#c89b3c]"
+                    onChange={name => setForm(f => ({ ...f, starterItem: name }))}
+                    ddData={ddData}
+                    fallbackItems={COMMON_ITEMS}
                   />
                 </div>
                 <div>
