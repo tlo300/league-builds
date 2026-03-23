@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { Build } from "@/db/schema";
-import { type DDragonData, championIcon, spellIcon, itemIcon, keystoneIcon, runePathIcon } from "@/app/lib/ddragon";
+import { type DDragonData, championIcon, championIconByKey, spellIcon, spellIconById, itemIcon, itemIconById, keystoneIcon, runePathIcon } from "@/app/lib/ddragon";
+import type { LinkedAccount } from "@/db/schema";
 
 const CHAMPIONS = [
   "Aatrox","Ahri","Akali","Akshan","Alistar","Amumu","Anivia","Annie","Aphelios",
@@ -128,6 +129,93 @@ export default function Home() {
     const data: Build[] = await res.json();
     setChampBuilds([...data].sort((a, b) => (b.winRate ?? -1) - (a.winRate ?? -1)));
   }, []);
+
+  // Linked accounts
+  const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [addAccountForm, setAddAccountForm] = useState({ riotId: "", region: "EUW1" });
+  const [addAccountError, setAddAccountError] = useState("");
+  const [addAccountLoading, setAddAccountLoading] = useState(false);
+  const [matchModal, setMatchModal] = useState<LinkedAccount | null>(null);
+  const [matches, setMatches] = useState<MatchSummary[] | null>(null);
+
+  type MatchSummary = {
+    matchId: string;
+    championName: string;
+    position: string;
+    win: boolean;
+    kills: number;
+    deaths: number;
+    assists: number;
+    cs: number;
+    items: number[];
+    spell1Id: number;
+    spell2Id: number;
+    queueName: string;
+    gameDuration: number;
+    gameCreation: number;
+  };
+
+  const fetchAccounts = useCallback(async () => {
+    const res = await fetch("/api/accounts");
+    const data = await res.json();
+    setAccounts(Array.isArray(data) ? data : []);
+  }, []);
+
+  useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
+
+  const handleAddAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddAccountError("");
+    setAddAccountLoading(true);
+    const parts = addAccountForm.riotId.split("#");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      setAddAccountError("Format: Name#Tag  (e.g. Faker#KR1)");
+      setAddAccountLoading(false);
+      return;
+    }
+    const res = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gameName: parts[0].trim(), tagLine: parts[1].trim(), region: addAccountForm.region }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setAddAccountError(data.error ?? "Failed to add account");
+      setAddAccountLoading(false);
+      return;
+    }
+    setShowAddAccount(false);
+    setAddAccountForm({ riotId: "", region: "EUW1" });
+    fetchAccounts();
+    setAddAccountLoading(false);
+  };
+
+  const handleRemoveAccount = async (id: number) => {
+    await fetch(`/api/accounts/${id}`, { method: "DELETE" });
+    fetchAccounts();
+    if (matchModal?.id === id) setMatchModal(null);
+  };
+
+  const openMatchHistory = useCallback(async (account: LinkedAccount) => {
+    setMatchModal(account);
+    setMatches(null);
+    const res = await fetch(`/api/accounts/${account.id}/matches`);
+    const data = await res.json();
+    setMatches(Array.isArray(data) ? data : []);
+  }, []);
+
+  const REGIONS = [
+    { value: "EUW1", label: "EUW" }, { value: "EUN1", label: "EUNE" },
+    { value: "NA1", label: "NA" }, { value: "KR", label: "KR" },
+    { value: "BR1", label: "BR" }, { value: "JP1", label: "JP" },
+    { value: "OC1", label: "OCE" }, { value: "TR1", label: "TR" },
+    { value: "RU", label: "RU" }, { value: "LA1", label: "LAN" },
+    { value: "LA2", label: "LAS" },
+  ];
+
+  const fmtDuration = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+  const fmtDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
   const fetchBuilds = useCallback(async () => {
     setLoading(true);
@@ -255,6 +343,43 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-6 py-6 flex gap-6">
         {/* Left: Build list */}
         <div className="flex-1 min-w-0">
+          {/* Linked accounts bar */}
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <span className="text-xs text-[#8a9bb0] uppercase tracking-wider shrink-0">Accounts</span>
+            {accounts.map(acc => (
+              <button
+                key={acc.id}
+                onClick={() => openMatchHistory(acc)}
+                className="group flex items-center gap-1.5 px-3 py-1 bg-[#0d1117] border border-[#1e2a3a] rounded-full text-xs text-[#e8d5a3] hover:border-[#c89b3c]/50 transition-colors"
+              >
+                {ddData && (
+                  <img
+                    src={`https://ddragon.leagueoflegends.com/cdn/${ddData.version}/img/profileicon/29.png`}
+                    className="w-4 h-4 rounded-full opacity-60"
+                    alt=""
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                )}
+                <span className="font-medium">{acc.gameName}</span>
+                <span className="text-[#4a5568]">#{acc.tagLine}</span>
+                <span className={`text-[0.65rem] px-1 rounded ${acc.region === "KR" ? "text-[#4a9ecf]" : acc.region.startsWith("EU") ? "text-[#9e4acf]" : "text-[#4a9e4a]"}`}>
+                  {acc.region.replace(/[0-9]/g, "")}
+                </span>
+                <span
+                  onClick={e => { e.stopPropagation(); handleRemoveAccount(acc.id); }}
+                  className="text-[#4a5568] hover:text-[#c84b31] ml-0.5 cursor-pointer leading-none"
+                  title="Remove"
+                >×</span>
+              </button>
+            ))}
+            <button
+              onClick={() => setShowAddAccount(true)}
+              className="px-3 py-1 bg-[#0d1117] border border-dashed border-[#1e2a3a] rounded-full text-xs text-[#8a9bb0] hover:text-[#c89b3c] hover:border-[#c89b3c]/40 transition-colors"
+            >
+              + Add Account
+            </button>
+          </div>
+
           {/* Filters */}
           <div className="flex gap-3 mb-5 flex-wrap">
             <input
@@ -555,6 +680,131 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Add account modal */}
+      {showAddAccount && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0d1117] border border-[#1e2a3a] rounded-xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-[#1e2a3a] flex items-center justify-between">
+              <h2 className="text-base font-bold text-[#c89b3c]">Link Account</h2>
+              <button onClick={() => { setShowAddAccount(false); setAddAccountError(""); }} className="text-[#8a9bb0] hover:text-[#e8d5a3] text-xl">&times;</button>
+            </div>
+            <form onSubmit={handleAddAccount} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Riot ID</label>
+                <input
+                  type="text"
+                  placeholder="PlayerName#EUW"
+                  value={addAccountForm.riotId}
+                  onChange={e => setAddAccountForm(f => ({ ...f, riotId: e.target.value }))}
+                  className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] placeholder-[#4a5568] focus:outline-none focus:border-[#c89b3c]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Region</label>
+                <select
+                  value={addAccountForm.region}
+                  onChange={e => setAddAccountForm(f => ({ ...f, region: e.target.value }))}
+                  className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
+                >
+                  {REGIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </div>
+              {addAccountError && <p className="text-xs text-[#c84b31]">{addAccountError}</p>}
+              <button
+                type="submit"
+                disabled={addAccountLoading}
+                className="w-full py-2 bg-[#c89b3c] hover:bg-[#d4a84a] disabled:opacity-50 text-black font-bold rounded transition-colors"
+              >
+                {addAccountLoading ? "Looking up..." : "Link Account"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Match history modal */}
+      {matchModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0d1117] border border-[#1e2a3a] rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div className="px-5 py-4 border-b border-[#1e2a3a] flex items-center gap-3 shrink-0">
+              <div className="flex-1">
+                <h2 className="text-lg font-bold text-[#c89b3c]">{matchModal.gameName}<span className="text-[#4a5568] font-normal">#{matchModal.tagLine}</span></h2>
+                <p className="text-xs text-[#8a9bb0]">{matchModal.region.replace(/[0-9]/g, "")} · Last 10 games</p>
+              </div>
+              <button onClick={() => setMatchModal(null)} className="text-[#8a9bb0] hover:text-[#e8d5a3] text-xl">&times;</button>
+            </div>
+
+            <div className="overflow-y-auto divide-y divide-[#1e2a3a]">
+              {matches === null ? (
+                <div className="text-center text-[#8a9bb0] py-12">Loading matches...</div>
+              ) : matches.length === 0 ? (
+                <div className="text-center text-[#8a9bb0] py-12">No recent matches found.</div>
+              ) : matches.map((m) => (
+                <div
+                  key={m.matchId}
+                  className={`flex items-center gap-3 px-4 py-3 ${m.win ? "border-l-2 border-[#4a9e4a]" : "border-l-2 border-[#c84b31]"}`}
+                >
+                  {/* Champion */}
+                  <div className="relative shrink-0">
+                    {ddData ? (
+                      <img
+                        src={championIconByKey(ddData, m.championName)}
+                        alt={m.championName}
+                        className="w-12 h-12 rounded-lg border border-[#1e2a3a]"
+                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : <div className="w-12 h-12 rounded-lg bg-[#1e2a3a]" />}
+                  </div>
+
+                  {/* Spells */}
+                  <div className="flex flex-col gap-1 shrink-0">
+                    {[m.spell1Id, m.spell2Id].map((sid, i) => {
+                      const icon = ddData ? spellIconById(ddData, sid) : null;
+                      return icon ? (
+                        <img key={i} src={icon} alt="" className="w-5 h-5 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      ) : <div key={i} className="w-5 h-5 rounded bg-[#1e2a3a]" />;
+                    })}
+                  </div>
+
+                  {/* Game info */}
+                  <div className="w-24 shrink-0">
+                    <div className={`text-xs font-bold ${m.win ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>{m.win ? "Victory" : "Defeat"}</div>
+                    <div className="text-xs text-[#8a9bb0]">{m.queueName}</div>
+                    {m.position && <div className="text-xs text-[#4a5568]">{m.position}</div>}
+                  </div>
+
+                  {/* KDA */}
+                  <div className="w-20 shrink-0 text-center">
+                    <div className="text-sm font-medium text-[#e8d5a3]">{m.kills}/{m.deaths}/{m.assists}</div>
+                    <div className="text-xs text-[#8a9bb0]">
+                      {m.deaths === 0 ? "Perfect" : ((m.kills + m.assists) / m.deaths).toFixed(1)} KDA
+                    </div>
+                    <div className="text-xs text-[#4a5568]">{m.cs} CS</div>
+                  </div>
+
+                  {/* Items */}
+                  <div className="flex flex-wrap gap-1 flex-1">
+                    {m.items.map((id, i) => {
+                      const icon = ddData ? itemIconById(ddData, id) : null;
+                      return icon ? (
+                        <img key={i} src={icon} alt="" className="w-7 h-7 rounded border border-[#1e2a3a]" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      ) : null;
+                    })}
+                  </div>
+
+                  {/* Time */}
+                  <div className="text-right shrink-0 text-xs text-[#4a5568]">
+                    <div>{fmtDuration(m.gameDuration)}</div>
+                    <div>{fmtDate(m.gameCreation)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Champion builds modal */}
       {champModal && (

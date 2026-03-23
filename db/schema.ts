@@ -25,3 +25,16 @@ export const builds = pgTable("builds", {
 
 export type Build = typeof builds.$inferSelect;
 export type NewBuild = typeof builds.$inferInsert;
+
+export const linkedAccounts = pgTable("linked_accounts", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  gameName: text("game_name").notNull(),
+  tagLine: text("tag_line").notNull(),
+  region: text("region").notNull(),   // e.g. EUW1, NA1, KR
+  puuid: text("puuid").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type LinkedAccount = typeof linkedAccounts.$inferSelect;
+export type NewLinkedAccount = typeof linkedAccounts.$inferInsert;

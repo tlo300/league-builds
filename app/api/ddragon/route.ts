@@ -36,8 +36,10 @@ export async function GET() {
 
     // Summoner spells available in Classic (SR) mode
     const spellKeys: Record<string, string> = {};
+    const spellIdKeys: Record<number, string> = {};
     const spellNames: string[] = [];
-    for (const [key, spell] of Object.entries(spellJson.data) as Array<[string, { name: string; modes: string[] }]>) {
+    for (const [key, spell] of Object.entries(spellJson.data) as Array<[string, { name: string; modes: string[]; key: string }]>) {
+      spellIdKeys[Number(spell.key)] = key; // numeric ID → ddragon key (e.g. 4 → "SummonerFlash")
       if (spell.modes?.includes("CLASSIC")) {
         spellKeys[spell.name] = key;
         spellNames.push(spell.name);
@@ -67,6 +69,7 @@ export async function GET() {
       itemIds,
       spellNames,
       spellKeys,
+      spellIdKeys,
       keystoneNames,
       keystoneIcons,
       runePathNames,
