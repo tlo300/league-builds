@@ -19,6 +19,7 @@ export const builds = pgTable("builds", {
   starterItem: text("starter_item"),
   notes: text("notes"),
   winRate: integer("win_rate"),          // optional manual win rate (0-100)
+  skillOrder: text("skill_order"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

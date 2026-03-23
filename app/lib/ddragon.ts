@@ -2,7 +2,7 @@ export type DDragonData = {
   version: string;
   champions: string[];
   championKeys: Record<string, string>;
-  items: Array<{ id: number; name: string }>;
+  items: Array<{ id: number; name: string; gold?: number; stats?: Record<string, number>; description?: string }>;
   itemIds: Record<string, number>;
   spellNames: string[];
   spellKeys: Record<string, string>;

@@ -25,11 +25,11 @@ export async function GET() {
 
     // Items: only purchasable items on Summoner's Rift, sorted by gold cost desc
     const itemIds: Record<string, number> = {};
-    const items: Array<{ id: number; name: string; gold: number }> = [];
-    for (const [id, item] of Object.entries(itemJson.data) as Array<[string, { name: string; gold: { total: number; purchasable: boolean }; maps: Record<string, boolean> }]>) {
+    const items: Array<{ id: number; name: string; gold: number; stats: Record<string, number>; description: string }> = [];
+    for (const [id, item] of Object.entries(itemJson.data) as Array<[string, { name: string; plaintext?: string; gold: { total: number; purchasable: boolean }; maps: Record<string, boolean>; stats?: Record<string, number> }]>) {
       if (item.maps?.["11"] && item.gold?.purchasable) {
         itemIds[item.name] = Number(id);
-        items.push({ id: Number(id), name: item.name, gold: item.gold.total ?? 0 });
+        items.push({ id: Number(id), name: item.name, gold: item.gold.total ?? 0, stats: item.stats ?? {}, description: item.plaintext ?? "" });
       }
     }
     items.sort((a, b) => b.gold - a.gold || a.name.localeCompare(b.name));
@@ -72,7 +72,7 @@ export async function GET() {
       version,
       champions,
       championKeys,
-      items: items.map((i) => ({ id: i.id, name: i.name })),
+      items: items.map((i) => ({ id: i.id, name: i.name, gold: i.gold, stats: i.stats, description: i.description })),
       itemIds,
       spellNames,
       spellKeys,

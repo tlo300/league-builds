@@ -5,6 +5,7 @@ import type { Build } from "@/db/schema";
 import { type DDragonData, championIcon, championIconByKey, spellIcon, spellIconById, itemIcon, itemIconById, keystoneIcon, runePathIcon, runeIconById } from "@/app/lib/ddragon";
 import type { LinkedAccount } from "@/db/schema";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { ItemPicker } from "@/app/components/ItemPicker";
 
 const CHAMPIONS = [
   "Aatrox","Ahri","Akali","Akshan","Alistar","Amumu","Anivia","Annie","Aphelios",
@@ -84,6 +85,7 @@ type BuildFormData = {
   starterItem: string;
   notes: string;
   winRate: string;
+  skillOrder: string;
 };
 
 const emptyForm: BuildFormData = {
@@ -103,6 +105,7 @@ const emptyForm: BuildFormData = {
   starterItem: "",
   notes: "",
   winRate: "",
+  skillOrder: "",
 };
 
 export default function Home() {
@@ -118,6 +121,11 @@ export default function Home() {
   const [champModal, setChampModal] = useState<string | null>(null);
   const [champBuilds, setChampBuilds] = useState<Build[] | null>(null);
   const [champRoleFilter, setChampRoleFilter] = useState("All");
+  const [champAbilities, setChampAbilities] = useState<ChampAbilities | null>(null);
+  const [champPersonalStats, setChampPersonalStats] = useState<ChampPersonalStats | null>(null);
+
+  // Linked accounts (declared early so openChampModal can reference it)
+  const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
 
   useEffect(() => {
     fetch("/api/ddragon").then((r) => r.json()).then(setDdData);
@@ -127,14 +135,62 @@ export default function Home() {
     setChampModal(champion);
     setChampBuilds(null);
     setChampRoleFilter("All");
-    const params = new URLSearchParams({ champion });
-    const res = await fetch(`/api/builds?${params.toString()}`);
-    const data: Build[] = await res.json();
-    setChampBuilds([...data].sort((a, b) => (b.winRate ?? -1) - (a.winRate ?? -1)));
-  }, []);
+    setChampAbilities(null);
+    setChampPersonalStats(null);
 
-  // Linked accounts
-  const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
+    const params = new URLSearchParams({ champion });
+    const buildsPromise = fetch(`/api/builds?${params.toString()}`).then(r => r.json());
+
+    // Fetch abilities from DDragon (need ddData.version — check state)
+    const abilityPromise = ddData ? (async () => {
+      const champKey = ddData.championKeys[champion] ?? champion.replace(/[^a-zA-Z]/g, "");
+      try {
+        const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${ddData.version}/data/en_US/champion/${champKey}.json`);
+        const json = await res.json();
+        const cd = json.data[champKey];
+        if (!cd) return null;
+        const stripHtml = (s: string) => s.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+        return {
+          passive: {
+            name: cd.passive.name,
+            description: stripHtml(cd.passive.description),
+            imageUrl: `https://ddragon.leagueoflegends.com/cdn/${ddData.version}/img/passive/${cd.passive.image.full}`,
+          },
+          spells: (cd.spells as Array<{ name: string; description: string; image: { full: string } }>).map(s => ({
+            name: s.name,
+            description: stripHtml(s.description),
+            imageUrl: `https://ddragon.leagueoflegends.com/cdn/${ddData.version}/img/spell/${s.image.full}`,
+          })),
+        } satisfies ChampAbilities;
+      } catch { return null; }
+    })() : Promise.resolve(null);
+
+    // Fetch personal stats from all linked accounts
+    const statsPromise = accounts.length > 0 ? (async () => {
+      const champKey = ddData?.championKeys[champion] ?? champion.replace(/[^a-zA-Z]/g, "");
+      const allMatchArrays = await Promise.all(
+        accounts.map(acc => fetch(`/api/accounts/${acc.id}/matches`).then(r => r.json()).catch(() => []))
+      );
+      const champMatches = (allMatchArrays.flat() as Array<{ championName: string; win: boolean; kills: number; deaths: number; assists: number; cs: number }>)
+        .filter(m => m.championName === champKey);
+      if (champMatches.length === 0) return null;
+      return {
+        games: champMatches.length,
+        wins: champMatches.filter(m => m.win).length,
+        totalKills: champMatches.reduce((s, m) => s + m.kills, 0),
+        totalDeaths: champMatches.reduce((s, m) => s + m.deaths, 0),
+        totalAssists: champMatches.reduce((s, m) => s + m.assists, 0),
+        totalCs: champMatches.reduce((s, m) => s + m.cs, 0),
+      };
+    })() : Promise.resolve(null);
+
+    const [data, abilities, stats] = await Promise.all([buildsPromise, abilityPromise, statsPromise]);
+    setChampBuilds([...(data as Build[])].sort((a, b) => (b.winRate ?? -1) - (a.winRate ?? -1)));
+    setChampAbilities(abilities);
+    setChampPersonalStats(stats);
+  }, [ddData, accounts]);
+
+  // Linked accounts (continued)
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [addAccountForm, setAddAccountForm] = useState({ riotId: "", region: "EUW1" });
   const [addAccountError, setAddAccountError] = useState("");
@@ -224,6 +280,10 @@ export default function Home() {
     gameDuration: number;
     gameCreation: number;
   };
+
+  type ChampAbility = { name: string; description: string; imageUrl: string; };
+  type ChampAbilities = { passive: ChampAbility; spells: ChampAbility[]; };
+  type ChampPersonalStats = { games: number; wins: number; totalKills: number; totalDeaths: number; totalAssists: number; totalCs: number; };
 
   const fetchAccounts = useCallback(async () => {
     const res = await fetch("/api/accounts");
@@ -362,6 +422,7 @@ export default function Home() {
       starterItem: build.starterItem ?? "",
       notes: build.notes ?? "",
       winRate: build.winRate?.toString() ?? "",
+      skillOrder: build.skillOrder ?? "",
     });
     setShowForm(true);
     setSelectedBuild(null);
@@ -738,6 +799,20 @@ export default function Home() {
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {selectedBuild.skillOrder && (
+                  <div>
+                    <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Skill Order</div>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {selectedBuild.skillOrder.split(/[\s→>|,]+/).filter(Boolean).map((skill, i, arr) => (
+                        <span key={i} className="flex items-center gap-1">
+                          <span className="w-7 h-7 rounded bg-[#1e2a3a] border border-[#2a3a4a] text-[#e8d5a3] text-xs font-bold flex items-center justify-center">{skill.trim()}</span>
+                          {i < arr.length - 1 && <span className="text-[#2a3a4a] text-xs">→</span>}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1299,6 +1374,64 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Abilities row */}
+              {champAbilities && (
+                <div className="flex items-center gap-3 px-5 py-3 border-b border-[#1e2a3a] bg-[#0a0a0f] shrink-0">
+                  {[
+                    { key: "P", ability: champAbilities.passive },
+                    ...champAbilities.spells.map((s, i) => ({ key: ["Q","W","E","R"][i], ability: s })),
+                  ].map(({ key, ability }) => (
+                    <div key={key} className="flex flex-col items-center gap-1 group relative cursor-default">
+                      <div className="relative">
+                        <img
+                          src={ability.imageUrl}
+                          alt={ability.name}
+                          className="w-10 h-10 rounded-lg border border-[#1e2a3a] group-hover:border-[#c89b3c]/50 transition-colors"
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                        <span className="absolute -top-1 -left-1 bg-[#0a0a0f] border border-[#1e2a3a] text-[#8a9bb0] text-[0.5rem] font-bold w-4 h-4 flex items-center justify-center rounded">
+                          {key}
+                        </span>
+                      </div>
+                      <span className="text-[0.6rem] text-[#4a5568] text-center max-w-[48px] truncate">{ability.name}</span>
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-[#0d1117] border border-[#1e2a3a] rounded-lg p-3 text-xs text-[#8a9bb0] leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none shadow-xl">
+                        <div className="font-bold text-[#e8d5a3] mb-1">{ability.name}</div>
+                        <div className="line-clamp-4">{ability.description}</div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Personal stats */}
+                  {champPersonalStats && (
+                    <div className="ml-auto flex items-center gap-4 text-xs border-l border-[#1e2a3a] pl-4">
+                      <div className="text-center">
+                        <div className="font-bold text-[#e8d5a3]">{champPersonalStats.games}</div>
+                        <div className="text-[#4a5568] uppercase tracking-wider text-[0.6rem]">Games</div>
+                      </div>
+                      <div className="text-center">
+                        <div className={`font-bold ${Math.round(champPersonalStats.wins / champPersonalStats.games * 100) >= 50 ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>
+                          {Math.round(champPersonalStats.wins / champPersonalStats.games * 100)}%
+                        </div>
+                        <div className="text-[#4a5568] uppercase tracking-wider text-[0.6rem]">WR</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold text-[#e8d5a3]">
+                          {champPersonalStats.totalDeaths === 0 ? "Perf" :
+                            ((champPersonalStats.totalKills + champPersonalStats.totalAssists) / champPersonalStats.totalDeaths).toFixed(2)}
+                        </div>
+                        <div className="text-[#4a5568] uppercase tracking-wider text-[0.6rem]">KDA</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold text-[#e8d5a3]">{Math.round(champPersonalStats.totalCs / champPersonalStats.games)}</div>
+                        <div className="text-[#4a5568] uppercase tracking-wider text-[0.6rem]">CS avg</div>
+                      </div>
+                      <div className="text-[0.6rem] text-[#4a5568] self-end pb-0.5">from {champPersonalStats.games} recent games</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Role tabs */}
               {roles.length > 2 && (
                 <div className="flex gap-1 px-5 py-3 border-b border-[#1e2a3a] shrink-0">
@@ -1444,6 +1577,18 @@ export default function Home() {
                             </div>
                           )}
 
+                          {build.skillOrder && (
+                            <div className="flex items-center gap-1.5 mt-3">
+                              <span className="text-[0.6rem] text-[#4a5568] uppercase tracking-wider">Skill order</span>
+                              {build.skillOrder.split(/[\s→>|,]+/).filter(Boolean).map((skill, i, arr) => (
+                                <span key={i} className="flex items-center gap-1">
+                                  <span className="w-5 h-5 rounded bg-[#1e2a3a] border border-[#2a3a4a] text-[#e8d5a3] text-[0.65rem] font-bold flex items-center justify-center">{skill.trim()}</span>
+                                  {i < arr.length - 1 && <span className="text-[#2a3a4a] text-[0.6rem]">›</span>}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
                           {build.notes && (
                             <p className="text-xs text-[#8a9bb0] mt-3 line-clamp-2 leading-relaxed">{build.notes}</p>
                           )}
@@ -1563,25 +1708,22 @@ export default function Home() {
                 <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-2">Items (in order)</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(["item1","item2","item3","item4","item5","item6"] as const).map((key, i) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded bg-[#1e2a3a] text-[#8a9bb0] text-xs flex items-center justify-center shrink-0">{i+1}</span>
-                      <input
-                        type="text"
-                        list="items-list"
-                        placeholder={`Item ${i+1}...`}
-                        value={form[key]}
-                        onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                        className="flex-1 px-2 py-1.5 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-xs text-[#e8d5a3] placeholder-[#4a5568] focus:outline-none focus:border-[#c89b3c]"
-                      />
-                    </div>
+                    <ItemPicker
+                      key={key}
+                      slot={i + 1}
+                      value={form[key]}
+                      onChange={name => setForm(f => ({ ...f, [key]: name }))}
+                      ddData={ddData}
+                      fallbackItems={COMMON_ITEMS}
+                    />
                   ))}
                 </div>
-                <datalist id="items-list">
-                  {itemList.map(item => <option key={item} value={item} />)}
-                </datalist>
               </div>
 
               {/* Starter + Win Rate */}
+              <datalist id="items-list">
+                {itemList.map(item => <option key={item} value={item} />)}
+              </datalist>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Starter Item</label>
@@ -1606,6 +1748,18 @@ export default function Home() {
                     className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] placeholder-[#4a5568] focus:outline-none focus:border-[#c89b3c]"
                   />
                 </div>
+              </div>
+
+              {/* Skill Order */}
+              <div>
+                <label className="block text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Skill Order</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Q → W → E  (max order)"
+                  value={form.skillOrder}
+                  onChange={e => setForm(f => ({ ...f, skillOrder: e.target.value }))}
+                  className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] placeholder-[#4a5568] focus:outline-none focus:border-[#c89b3c]"
+                />
               </div>
 
               {/* Notes */}
