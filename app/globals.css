@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 :root {
+  --background: #000000;
+  --foreground: #ededed;
+  --font-sans: var(--font-geist-sans);
   --gold: #c89b3c;
   --gold-light: #f0e6c0;
   --dark-bg: #0a0a0f;
@@ -10,4 +13,10 @@
   --text-secondary: #8a9bb0;
   --blue-accent: #0bc4e3;
   --red-accent: #c84b31;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
 }

@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
+import { Geist } from "next/font/google";
 import { ClerkProvider, SignInButton, Show, UserButton } from "@clerk/nextjs";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import "./globals.css";
 
 const HUB_URL = process.env.NEXT_PUBLIC_HUB_URL ?? "https://hub-green-beta.vercel.app";
+
+const geist = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "League Builds",
@@ -21,13 +27,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html lang="en">
+    <html lang="en" className={`${geist.variable} antialiased`}>
       <body>
         <ClerkProvider>
-          <header className="flex justify-end items-center px-6 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <header className="flex justify-end items-center px-6 py-3 border-b border-[#333] bg-black">
             <Show when="signed-out">
               <SignInButton>
-                <button className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
+                <button className="text-sm font-medium text-[#888] hover:text-white transition-colors">
                   Sign in
                 </button>
               </SignInButton>
