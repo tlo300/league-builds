@@ -113,9 +113,20 @@ export default function Home() {
   const [filterRole, setFilterRole] = useState("All");
   const [selectedBuild, setSelectedBuild] = useState<Build | null>(null);
   const [ddData, setDdData] = useState<DDragonData | null>(null);
+  const [champModal, setChampModal] = useState<string | null>(null);
+  const [champBuilds, setChampBuilds] = useState<Build[] | null>(null);
 
   useEffect(() => {
     fetch("/api/ddragon").then((r) => r.json()).then(setDdData);
+  }, []);
+
+  const openChampModal = useCallback(async (champion: string) => {
+    setChampModal(champion);
+    setChampBuilds(null);
+    const params = new URLSearchParams({ champion });
+    const res = await fetch(`/api/builds?${params.toString()}`);
+    const data: Build[] = await res.json();
+    setChampBuilds([...data].sort((a, b) => (b.winRate ?? -1) - (a.winRate ?? -1)));
   }, []);
 
   const fetchBuilds = useCallback(async () => {
@@ -299,7 +310,10 @@ export default function Home() {
                         />
                       )}
                       <div>
-                        <h3 className="font-bold text-[#e8d5a3] text-base">{build.champion}</h3>
+                        <h3
+                          className="font-bold text-[#e8d5a3] text-base hover:text-[#c89b3c] transition-colors cursor-pointer"
+                          onClick={e => { e.stopPropagation(); openChampModal(build.champion); }}
+                        >{build.champion}</h3>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${roleBg[build.role] ?? ""} ${roleColor[build.role] ?? ""}`}>
                           {build.role}
                         </span>
@@ -373,7 +387,10 @@ export default function Home() {
                   />
                 )}
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-xl font-bold text-[#c89b3c] truncate">{selectedBuild.champion}</h2>
+                  <h2
+                    className="text-xl font-bold text-[#c89b3c] truncate hover:underline cursor-pointer"
+                    onClick={() => openChampModal(selectedBuild.champion)}
+                  >{selectedBuild.champion}</h2>
                   <span className={`text-xs font-semibold ${roleColor[selectedBuild.role] ?? ""}`}>
                     {selectedBuild.role}
                   </span>
@@ -539,7 +556,113 @@ export default function Home() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Champion builds modal */}
+      {champModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0d1117] border border-[#1e2a3a] rounded-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-[#1e2a3a] flex items-center gap-3 shrink-0">
+              {ddData && (
+                <img
+                  src={championIcon(ddData, champModal)}
+                  alt={champModal}
+                  className="w-12 h-12 rounded-lg border border-[#c89b3c]/40"
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-bold text-[#c89b3c]">{champModal}</h2>
+                <p className="text-xs text-[#8a9bb0]">Your builds · sorted by win rate</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={`https://www.op.gg/champions/${champModal.toLowerCase().replace(/[^a-z0-9]/g, "")}/builds`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-[#8a9bb0] hover:text-[#c89b3c] border border-[#1e2a3a] hover:border-[#c89b3c]/40 rounded px-2 py-1 transition-colors"
+                >
+                  OP.GG ↗
+                </a>
+                <button
+                  onClick={() => setChampModal(null)}
+                  className="text-[#8a9bb0] hover:text-[#e8d5a3] text-xl leading-none"
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+
+            {/* Build list */}
+            <div className="overflow-y-auto p-4 space-y-2">
+              {champBuilds === null ? (
+                <div className="text-center text-[#8a9bb0] py-10">Loading...</div>
+              ) : champBuilds.length === 0 ? (
+                <div className="text-center text-[#8a9bb0] py-10">No builds saved for {champModal} yet.</div>
+              ) : champBuilds.map(build => (
+                <div
+                  key={build.id}
+                  onClick={() => { setSelectedBuild(build); setChampModal(null); }}
+                  className="bg-[#0a0a0f] border border-[#1e2a3a] rounded-lg p-3 cursor-pointer hover:border-[#c89b3c]/50 transition-all"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${roleBg[build.role] ?? ""} ${roleColor[build.role] ?? ""}`}>
+                      {build.role}
+                    </span>
+                    {build.winRate != null ? (
+                      <span className={`text-sm font-bold ${build.winRate >= 50 ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>
+                        {build.winRate}% WR
+                      </span>
+                    ) : (
+                      <span className="text-xs text-[#4a5568]">No win rate</span>
+                    )}
+                  </div>
+
+                  {build.keystoneRune && (
+                    <div className="flex items-center gap-1.5 mb-2">
+                      {ddData && keystoneIcon(ddData, build.keystoneRune) && (
+                        <img
+                          src={keystoneIcon(ddData, build.keystoneRune)!}
+                          alt={build.keystoneRune}
+                          className="w-5 h-5 rounded-full"
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      )}
+                      <span className="text-xs text-[#8a9bb0]">{build.keystoneRune}</span>
+                      {build.primaryRunePath && <span className="text-xs text-[#4a5568]">· {build.primaryRunePath}</span>}
+                    </div>
+                  )}
+
+                  {items(build).length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {items(build).map((item, i) => {
+                        const icon = item && ddData ? itemIcon(ddData, item) : null;
+                        return icon ? (
+                          <img
+                            key={i}
+                            src={icon}
+                            alt={item ?? ""}
+                            title={item ?? ""}
+                            className="w-7 h-7 rounded border border-[#1e2a3a]"
+                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          />
+                        ) : (
+                          <span key={i} className="text-xs bg-[#1e2a3a] text-[#e8d5a3] px-1.5 py-0.5 rounded">{item}</span>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {build.notes && (
+                    <p className="text-xs text-[#8a9bb0] mt-2 line-clamp-1">{build.notes}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Build form modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-[#0d1117] border border-[#1e2a3a] rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
