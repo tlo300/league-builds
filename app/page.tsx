@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { Build } from "@/db/schema";
+import { championIcon, spellIcon, itemIcon, keystoneIcon, runePathIcon } from "@/app/lib/ddragon";
 
 const CHAMPIONS = [
   "Aatrox","Ahri","Akali","Akshan","Alistar","Amumu","Anivia","Annie","Aphelios",
@@ -276,11 +277,19 @@ export default function Home() {
                   }`}
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h3 className="font-bold text-[#e8d5a3] text-base">{build.champion}</h3>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${roleBg[build.role] ?? ""} ${roleColor[build.role] ?? ""}`}>
-                        {build.role}
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={championIcon(build.champion)}
+                        alt={build.champion}
+                        className="w-10 h-10 rounded border border-[#1e2a3a]"
+                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                      <div>
+                        <h3 className="font-bold text-[#e8d5a3] text-base">{build.champion}</h3>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${roleBg[build.role] ?? ""} ${roleColor[build.role] ?? ""}`}>
+                          {build.role}
+                        </span>
+                      </div>
                     </div>
                     {build.winRate != null && (
                       <span className={`text-sm font-bold ${build.winRate >= 50 ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>
@@ -340,15 +349,21 @@ export default function Home() {
         {selectedBuild && (
           <div className="w-80 shrink-0">
             <div className="bg-[#0d1117] border border-[#c89b3c]/40 rounded-lg p-5 sticky top-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-bold text-[#c89b3c]">{selectedBuild.champion}</h2>
+              <div className="flex items-center gap-3 mb-4">
+                <img
+                  src={championIcon(selectedBuild.champion)}
+                  alt={selectedBuild.champion}
+                  className="w-16 h-16 rounded-lg border border-[#c89b3c]/40 shrink-0"
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold text-[#c89b3c] truncate">{selectedBuild.champion}</h2>
                   <span className={`text-xs font-semibold ${roleColor[selectedBuild.role] ?? ""}`}>
                     {selectedBuild.role}
                   </span>
                 </div>
                 {selectedBuild.winRate != null && (
-                  <div className={`text-2xl font-bold ${selectedBuild.winRate >= 50 ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>
+                  <div className={`text-2xl font-bold shrink-0 ${selectedBuild.winRate >= 50 ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>
                     {selectedBuild.winRate}%
                   </div>
                 )}
@@ -357,43 +372,126 @@ export default function Home() {
               <div className="space-y-4 text-sm">
                 {(selectedBuild.summonerSpell1 || selectedBuild.summonerSpell2) && (
                   <div>
-                    <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Summoner Spells</div>
-                    <div className="text-[#e8d5a3]">
-                      {selectedBuild.summonerSpell1} / {selectedBuild.summonerSpell2}
+                    <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1.5">Summoner Spells</div>
+                    <div className="flex items-center gap-2">
+                      {[selectedBuild.summonerSpell1, selectedBuild.summonerSpell2].map((spell, i) => {
+                        const icon = spell ? spellIcon(spell) : null;
+                        return spell ? (
+                          <div key={i} className="flex items-center gap-1.5">
+                            {icon ? (
+                              <img
+                                src={icon}
+                                alt={spell}
+                                title={spell}
+                                className="w-8 h-8 rounded border border-[#1e2a3a]"
+                                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                              />
+                            ) : null}
+                            <span className="text-xs text-[#e8d5a3]">{spell}</span>
+                          </div>
+                        ) : null;
+                      })}
                     </div>
                   </div>
                 )}
 
                 {selectedBuild.keystoneRune && (
                   <div>
-                    <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Runes</div>
-                    <div className="text-[#e8d5a3] font-medium">{selectedBuild.keystoneRune}</div>
-                    {(selectedBuild.primaryRunePath || selectedBuild.secondaryRunePath) && (
-                      <div className="text-[#8a9bb0] text-xs mt-0.5">
-                        {selectedBuild.primaryRunePath}
-                        {selectedBuild.secondaryRunePath && ` / ${selectedBuild.secondaryRunePath}`}
+                    <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1.5">Runes</div>
+                    <div className="flex items-center gap-2">
+                      {keystoneIcon(selectedBuild.keystoneRune) && (
+                        <img
+                          src={keystoneIcon(selectedBuild.keystoneRune)!}
+                          alt={selectedBuild.keystoneRune}
+                          title={selectedBuild.keystoneRune}
+                          className="w-8 h-8 rounded-full border border-[#1e2a3a]"
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      )}
+                      <div>
+                        <div className="text-[#e8d5a3] font-medium text-sm">{selectedBuild.keystoneRune}</div>
+                        {(selectedBuild.primaryRunePath || selectedBuild.secondaryRunePath) && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {selectedBuild.primaryRunePath && runePathIcon(selectedBuild.primaryRunePath) && (
+                              <img
+                                src={runePathIcon(selectedBuild.primaryRunePath)!}
+                                alt={selectedBuild.primaryRunePath}
+                                title={selectedBuild.primaryRunePath}
+                                className="w-4 h-4"
+                                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                              />
+                            )}
+                            <span className="text-[#8a9bb0] text-xs">{selectedBuild.primaryRunePath}</span>
+                            {selectedBuild.secondaryRunePath && (
+                              <>
+                                <span className="text-[#4a5568] text-xs">/</span>
+                                {runePathIcon(selectedBuild.secondaryRunePath) && (
+                                  <img
+                                    src={runePathIcon(selectedBuild.secondaryRunePath)!}
+                                    alt={selectedBuild.secondaryRunePath}
+                                    title={selectedBuild.secondaryRunePath}
+                                    className="w-4 h-4"
+                                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                  />
+                                )}
+                                <span className="text-[#8a9bb0] text-xs">{selectedBuild.secondaryRunePath}</span>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
 
                 {selectedBuild.starterItem && (
                   <div>
-                    <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Starter</div>
-                    <div className="text-[#e8d5a3]">{selectedBuild.starterItem}</div>
+                    <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1.5">Starter</div>
+                    <div className="flex items-center gap-2">
+                      {itemIcon(selectedBuild.starterItem) && (
+                        <img
+                          src={itemIcon(selectedBuild.starterItem)!}
+                          alt={selectedBuild.starterItem}
+                          title={selectedBuild.starterItem}
+                          className="w-8 h-8 rounded border border-[#1e2a3a]"
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      )}
+                      <span className="text-[#e8d5a3] text-sm">{selectedBuild.starterItem}</span>
+                    </div>
                   </div>
                 )}
 
                 {items(selectedBuild).length > 0 && (
                   <div>
-                    <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1">Core Items</div>
-                    <div className="space-y-1">
-                      {items(selectedBuild).map((item, i) => (
-                        <div key={i} className="flex items-center gap-2 text-[#e8d5a3]">
-                          <span className="w-4 h-4 rounded bg-[#1e2a3a] text-[#8a9bb0] text-xs flex items-center justify-center">{i + 1}</span>
-                          {item}
-                        </div>
-                      ))}
+                    <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1.5">Core Items</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {items(selectedBuild).map((item, i) => {
+                        const icon = item ? itemIcon(item) : null;
+                        return (
+                          <div key={i} title={item ?? undefined} className="flex flex-col items-center gap-0.5">
+                            {icon ? (
+                              <img
+                                src={icon}
+                                alt={item ?? ""}
+                                className="w-10 h-10 rounded border border-[#1e2a3a] hover:border-[#c89b3c]/60 transition-colors"
+                                onError={(e) => {
+                                  const el = e.target as HTMLImageElement;
+                                  el.style.display = "none";
+                                  const fallback = el.nextElementSibling as HTMLElement | null;
+                                  if (fallback) fallback.style.display = "flex";
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="w-10 h-10 rounded border border-[#1e2a3a] bg-[#1e2a3a] items-center justify-center text-xs text-[#e8d5a3] text-center leading-tight p-0.5"
+                              style={{ display: icon ? "none" : "flex" }}
+                            >
+                              {item}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
