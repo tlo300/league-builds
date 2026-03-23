@@ -207,7 +207,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <a
-              href="http://localhost:3000"
+              href={process.env.NEXT_PUBLIC_VERCEL_URL ? "https://hub-green-beta.vercel.app" : "http://localhost:3000"}
               className="text-[#8a9bb0] hover:text-[#e8d5a3] text-sm transition-colors"
             >
               ← Hub
