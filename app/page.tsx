@@ -752,41 +752,41 @@ export default function Home() {
             </div>
 
             {/* Rank panel */}
-            {(rankData === null || rankData.length > 0) && (
-              <div className="px-5 py-4 border-b border-[#1e2a3a] shrink-0">
-                {rankData === null ? (
-                  <div className="text-xs text-[#4a5568]">Loading rank...</div>
-                ) : (
-                  <div className="flex gap-4 flex-wrap">
-                    {rankData.map((entry) => {
-                      const tierCap = entry.tier.charAt(0) + entry.tier.slice(1).toLowerCase();
-                      const emblemUrl = `https://ddragon.leagueoflegends.com/cdn/img/ranked-emblems/Emblem_${tierCap}.png`;
-                      const wr = Math.round((entry.wins / (entry.wins + entry.losses)) * 100);
-                      const queueLabel = entry.queueType === "RANKED_SOLO_5x5" ? "Ranked Solo/Duo" : "Ranked Flex";
-                      return (
-                        <div key={entry.queueType} className="flex items-center gap-3 flex-1 min-w-48 bg-[#0a0a0f] border border-[#1e2a3a] rounded-lg px-4 py-3">
-                          <img
-                            src={emblemUrl}
-                            alt={tierCap}
-                            className="w-14 h-14 object-contain shrink-0"
-                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[0.65rem] text-[#8a9bb0] uppercase tracking-wider mb-0.5">{queueLabel}</div>
-                            <div className="text-base font-bold text-[#e8d5a3]">{tierCap} {entry.rank}</div>
-                            <div className="text-sm text-[#c89b3c]">{entry.leaguePoints} LP</div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-xs text-[#8a9bb0]">{entry.wins}W {entry.losses}L</div>
-                            <div className={`text-sm font-bold ${wr >= 50 ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>{wr}%</div>
-                          </div>
+            <div className="px-5 py-4 border-b border-[#1e2a3a] shrink-0">
+              {rankData === null ? (
+                <div className="text-xs text-[#4a5568] animate-pulse">Loading rank...</div>
+              ) : rankData.length === 0 ? (
+                <div className="text-xs text-[#4a5568]">Unranked this season</div>
+              ) : (
+                <div className="flex gap-3 flex-wrap">
+                  {rankData.map((entry) => {
+                    const tierCap = entry.tier.charAt(0) + entry.tier.slice(1).toLowerCase();
+                    const emblemUrl = `https://ddragon.leagueoflegends.com/cdn/img/ranked-emblems/Emblem_${tierCap}.png`;
+                    const wr = Math.round((entry.wins / (entry.wins + entry.losses)) * 100);
+                    const queueLabel = entry.queueType === "RANKED_SOLO_5x5" ? "Ranked Solo/Duo" : "Ranked Flex";
+                    return (
+                      <div key={entry.queueType} className="flex items-center gap-3 flex-1 min-w-52 bg-[#0a0a0f] border border-[#1e2a3a] rounded-lg px-4 py-3">
+                        <img
+                          src={emblemUrl}
+                          alt={tierCap}
+                          className="w-14 h-14 object-contain shrink-0"
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[0.65rem] text-[#8a9bb0] uppercase tracking-wider mb-0.5">{queueLabel}</div>
+                          <div className="text-base font-bold text-[#e8d5a3]">{tierCap} {entry.rank}</div>
+                          <div className="text-sm text-[#c89b3c]">{entry.leaguePoints} LP</div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+                        <div className="text-right shrink-0">
+                          <div className="text-xs text-[#8a9bb0]">{entry.wins}W {entry.losses}L</div>
+                          <div className={`text-sm font-bold ${wr >= 50 ? "text-[#4a9e4a]" : "text-[#c84b31]"}`}>{wr}%</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <div className="overflow-y-auto divide-y divide-[#1e2a3a]">
               {matches === null ? (
