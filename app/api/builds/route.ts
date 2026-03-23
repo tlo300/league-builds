@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { builds, NewBuild } from "@/db/schema";
-import { eq, desc, ilike } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
@@ -12,9 +12,7 @@ export async function GET(request: NextRequest) {
   const champion = searchParams.get("champion");
   const role = searchParams.get("role");
 
-  let query = db.select().from(builds).orderBy(desc(builds.createdAt));
-
-  const rows = await query;
+  const rows = await db.select().from(builds).where(eq(builds.userId, userId)).orderBy(desc(builds.createdAt));
   let result = rows;
 
   if (champion) {
@@ -32,6 +30,6 @@ export async function POST(request: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body: NewBuild = await request.json();
-  const [newBuild] = await db.insert(builds).values(body).returning();
+  const [newBuild] = await db.insert(builds).values({ ...body, userId }).returning();
   return NextResponse.json(newBuild, { status: 201 });
 }

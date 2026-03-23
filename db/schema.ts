@@ -2,6 +2,7 @@ import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
 
 export const builds = pgTable("builds", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
   champion: text("champion").notNull(),
   role: text("role").notNull(),          // Top, Jungle, Mid, Bot, Support
   keystoneRune: text("keystone_rune"),
