@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { Build } from "@/db/schema";
-import { championIcon, spellIcon, itemIcon, keystoneIcon, runePathIcon } from "@/app/lib/ddragon";
+import { type DDragonData, championIcon, spellIcon, itemIcon, keystoneIcon, runePathIcon } from "@/app/lib/ddragon";
 
 const CHAMPIONS = [
   "Aatrox","Ahri","Akali","Akshan","Alistar","Amumu","Anivia","Annie","Aphelios",
@@ -43,19 +43,19 @@ const SUMMONER_SPELLS = [
   "Barrier", "Cleanse", "Ghost", "Clarity"
 ];
 
+// Fallback item list used before DDragon data loads
 const COMMON_ITEMS = [
   "Trinity Force", "Blade of the Ruined King", "Kraken Slayer", "Galeforce",
   "Infinity Edge", "Rabadon's Deathcap", "Luden's Tempest", "Shadowflame",
-  "Rod of Ages", "Riftmaker", "Sunfire Aegis", "Heartsteel", "Jak'Sho",
-  "Radiant Virtue", "Black Cleaver", "Stridebreaker", "Divine Sunderer",
-  "Mythic items", "Immortal Shieldbow", "Navori Quickblades", "Eclipse",
+  "Rod of Ages", "Riftmaker", "Sunfire Aegis", "Heartsteel", "Jak'Sho, The Protean",
+  "Black Cleaver", "Immortal Shieldbow", "Navori Quickblades", "Eclipse",
   "Serpent's Fang", "Axiom Arc", "Manamune", "Muramana", "Ravenous Hydra",
   "Titanic Hydra", "Sterak's Gage", "Death's Dance", "Guardian Angel",
   "Wit's End", "Frozen Heart", "Randuin's Omen", "Thornmail",
   "Spirit Visage", "Force of Nature", "Warmog's Armor",
   "Zhonya's Hourglass", "Banshee's Veil", "Void Staff", "Demonic Embrace",
-  "Cosmic Drive", "Stormsurge", "Malignance", "Cryptbloom",
-  "Runaan's Hurricane", "Guinsoo's Rageblade", "Wit's End",
+  "Cosmic Drive", "Malignance", "Cryptbloom",
+  "Runaan's Hurricane", "Guinsoo's Rageblade",
   "Youmuu's Ghostblade", "Duskblade of Draktharr", "Edge of Night",
   "Opportunity", "Hubris",
   "Sorcerer's Shoes", "Plated Steelcaps", "Mercury's Treads",
@@ -112,6 +112,11 @@ export default function Home() {
   const [filterChampion, setFilterChampion] = useState("");
   const [filterRole, setFilterRole] = useState("All");
   const [selectedBuild, setSelectedBuild] = useState<Build | null>(null);
+  const [ddData, setDdData] = useState<DDragonData | null>(null);
+
+  useEffect(() => {
+    fetch("/api/ddragon").then((r) => r.json()).then(setDdData);
+  }, []);
 
   const fetchBuilds = useCallback(async () => {
     setLoading(true);
@@ -201,6 +206,13 @@ export default function Home() {
   const items = (b: Build) =>
     [b.item1, b.item2, b.item3, b.item4, b.item5, b.item6].filter(Boolean);
 
+  // Use DDragon data when loaded, fall back to hardcoded lists while loading
+  const championList = ddData?.champions ?? CHAMPIONS;
+  const spellList = ddData?.spellNames ?? SUMMONER_SPELLS;
+  const keystoneList = ddData?.keystoneNames ?? KEYSTONE_RUNES;
+  const runePathList = ddData?.runePathNames ?? RUNE_PATHS;
+  const itemList = ddData?.items.map((i) => i.name) ?? COMMON_ITEMS;
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-[#e8d5a3]">
       {/* Header */}
@@ -278,12 +290,14 @@ export default function Home() {
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <img
-                        src={championIcon(build.champion)}
-                        alt={build.champion}
-                        className="w-10 h-10 rounded border border-[#1e2a3a]"
-                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
+                      {ddData && (
+                        <img
+                          src={championIcon(ddData, build.champion)}
+                          alt={build.champion}
+                          className="w-10 h-10 rounded border border-[#1e2a3a]"
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      )}
                       <div>
                         <h3 className="font-bold text-[#e8d5a3] text-base">{build.champion}</h3>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${roleBg[build.role] ?? ""} ${roleColor[build.role] ?? ""}`}>
@@ -350,12 +364,14 @@ export default function Home() {
           <div className="w-80 shrink-0">
             <div className="bg-[#0d1117] border border-[#c89b3c]/40 rounded-lg p-5 sticky top-6">
               <div className="flex items-center gap-3 mb-4">
-                <img
-                  src={championIcon(selectedBuild.champion)}
-                  alt={selectedBuild.champion}
-                  className="w-16 h-16 rounded-lg border border-[#c89b3c]/40 shrink-0"
-                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                />
+                {ddData && (
+                  <img
+                    src={championIcon(ddData, selectedBuild.champion)}
+                    alt={selectedBuild.champion}
+                    className="w-16 h-16 rounded-lg border border-[#c89b3c]/40 shrink-0"
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                )}
                 <div className="flex-1 min-w-0">
                   <h2 className="text-xl font-bold text-[#c89b3c] truncate">{selectedBuild.champion}</h2>
                   <span className={`text-xs font-semibold ${roleColor[selectedBuild.role] ?? ""}`}>
@@ -375,7 +391,7 @@ export default function Home() {
                     <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1.5">Summoner Spells</div>
                     <div className="flex items-center gap-2">
                       {[selectedBuild.summonerSpell1, selectedBuild.summonerSpell2].map((spell, i) => {
-                        const icon = spell ? spellIcon(spell) : null;
+                        const icon = spell && ddData ? spellIcon(ddData, spell) : null;
                         return spell ? (
                           <div key={i} className="flex items-center gap-1.5">
                             {icon ? (
@@ -399,9 +415,9 @@ export default function Home() {
                   <div>
                     <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1.5">Runes</div>
                     <div className="flex items-center gap-2">
-                      {keystoneIcon(selectedBuild.keystoneRune) && (
+                      {ddData && keystoneIcon(ddData, selectedBuild.keystoneRune) && (
                         <img
-                          src={keystoneIcon(selectedBuild.keystoneRune)!}
+                          src={keystoneIcon(ddData, selectedBuild.keystoneRune)!}
                           alt={selectedBuild.keystoneRune}
                           title={selectedBuild.keystoneRune}
                           className="w-8 h-8 rounded-full border border-[#1e2a3a]"
@@ -412,9 +428,9 @@ export default function Home() {
                         <div className="text-[#e8d5a3] font-medium text-sm">{selectedBuild.keystoneRune}</div>
                         {(selectedBuild.primaryRunePath || selectedBuild.secondaryRunePath) && (
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            {selectedBuild.primaryRunePath && runePathIcon(selectedBuild.primaryRunePath) && (
+                            {ddData && selectedBuild.primaryRunePath && runePathIcon(ddData, selectedBuild.primaryRunePath) && (
                               <img
-                                src={runePathIcon(selectedBuild.primaryRunePath)!}
+                                src={runePathIcon(ddData, selectedBuild.primaryRunePath)!}
                                 alt={selectedBuild.primaryRunePath}
                                 title={selectedBuild.primaryRunePath}
                                 className="w-4 h-4"
@@ -425,9 +441,9 @@ export default function Home() {
                             {selectedBuild.secondaryRunePath && (
                               <>
                                 <span className="text-[#4a5568] text-xs">/</span>
-                                {runePathIcon(selectedBuild.secondaryRunePath) && (
+                                {ddData && runePathIcon(ddData, selectedBuild.secondaryRunePath) && (
                                   <img
-                                    src={runePathIcon(selectedBuild.secondaryRunePath)!}
+                                    src={runePathIcon(ddData, selectedBuild.secondaryRunePath)!}
                                     alt={selectedBuild.secondaryRunePath}
                                     title={selectedBuild.secondaryRunePath}
                                     className="w-4 h-4"
@@ -448,9 +464,9 @@ export default function Home() {
                   <div>
                     <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1.5">Starter</div>
                     <div className="flex items-center gap-2">
-                      {itemIcon(selectedBuild.starterItem) && (
+                      {ddData && itemIcon(ddData, selectedBuild.starterItem) && (
                         <img
-                          src={itemIcon(selectedBuild.starterItem)!}
+                          src={itemIcon(ddData, selectedBuild.starterItem)!}
                           alt={selectedBuild.starterItem}
                           title={selectedBuild.starterItem}
                           className="w-8 h-8 rounded border border-[#1e2a3a]"
@@ -467,7 +483,7 @@ export default function Home() {
                     <div className="text-xs text-[#8a9bb0] uppercase tracking-wider mb-1.5">Core Items</div>
                     <div className="flex flex-wrap gap-1.5">
                       {items(selectedBuild).map((item, i) => {
-                        const icon = item ? itemIcon(item) : null;
+                        const icon = item && ddData ? itemIcon(ddData, item) : null;
                         return (
                           <div key={i} title={item ?? undefined} className="flex flex-col items-center gap-0.5">
                             {icon ? (
@@ -546,7 +562,7 @@ export default function Home() {
                     className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
                   >
                     <option value="">Select champion...</option>
-                    {CHAMPIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                    {championList.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
@@ -571,7 +587,7 @@ export default function Home() {
                     onChange={e => setForm(f => ({ ...f, summonerSpell1: e.target.value }))}
                     className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
                   >
-                    {SUMMONER_SPELLS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {spellList.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div>
@@ -581,7 +597,7 @@ export default function Home() {
                     onChange={e => setForm(f => ({ ...f, summonerSpell2: e.target.value }))}
                     className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
                   >
-                    {SUMMONER_SPELLS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {spellList.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
@@ -596,7 +612,7 @@ export default function Home() {
                     className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
                   >
                     <option value="">Select...</option>
-                    {KEYSTONE_RUNES.map(r => <option key={r} value={r}>{r}</option>)}
+                    {keystoneList.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
                 <div>
@@ -607,7 +623,7 @@ export default function Home() {
                     className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
                   >
                     <option value="">Select...</option>
-                    {RUNE_PATHS.map(r => <option key={r} value={r}>{r}</option>)}
+                    {runePathList.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
                 <div>
@@ -618,7 +634,7 @@ export default function Home() {
                     className="w-full px-3 py-2 bg-[#0a0a0f] border border-[#1e2a3a] rounded text-sm text-[#e8d5a3] focus:outline-none focus:border-[#c89b3c]"
                   >
                     <option value="">Select...</option>
-                    {RUNE_PATHS.map(r => <option key={r} value={r}>{r}</option>)}
+                    {runePathList.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
               </div>
@@ -642,7 +658,7 @@ export default function Home() {
                   ))}
                 </div>
                 <datalist id="items-list">
-                  {COMMON_ITEMS.map(item => <option key={item} value={item} />)}
+                  {itemList.map(item => <option key={item} value={item} />)}
                 </datalist>
               </div>
 
