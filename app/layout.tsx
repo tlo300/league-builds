@@ -14,7 +14,8 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth();
   if (userId) {
-    const user = await clerkClient().users.getUser(userId);
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
     const allowedApps = (user.privateMetadata?.apps as string[]) ?? [];
     if (!allowedApps.includes("league-builds")) redirect(HUB_URL);
   }
