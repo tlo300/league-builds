@@ -1012,20 +1012,22 @@ export default function Home() {
                 <div className="flex gap-3 flex-wrap">
                   {rankData.map((entry) => {
                     const tierCap = entry.tier.charAt(0) + entry.tier.slice(1).toLowerCase();
-                    const emblemUrl = `https://ddragon.leagueoflegends.com/cdn/img/ranked-emblems/Emblem_${tierCap}.png`;
+                    const emblemUrl = `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-${entry.tier.toLowerCase()}.png`;
                     const wr = Math.round((entry.wins / (entry.wins + entry.losses)) * 100);
                     const queueLabel = entry.queueType === "RANKED_SOLO_5x5" ? "Ranked Solo/Duo" : "Ranked Flex";
                     return (
-                      <div key={entry.queueType} className="flex items-center gap-3 flex-1 min-w-52 bg-[#0a0a0f] border border-[#1e2a3a] rounded-lg px-4 py-3">
-                        <img
-                          src={emblemUrl}
-                          alt={tierCap}
-                          className="w-14 h-14 object-contain shrink-0"
-                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
+                      <div key={entry.queueType} className="flex items-center gap-4 flex-1 min-w-52 bg-[#0a0a0f] border border-[#1e2a3a] rounded-lg px-4 h-20 overflow-hidden">
+                        <div className="w-28 h-full shrink-0 overflow-hidden flex items-center justify-center">
+                          <img
+                            src={emblemUrl}
+                            alt={tierCap}
+                            className="w-28 h-28 object-contain scale-[2.8]"
+                            onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
+                          />
+                        </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-[0.65rem] text-[#8a9bb0] uppercase tracking-wider mb-0.5">{queueLabel}</div>
-                          <div className="text-base font-bold text-[#e8d5a3]">{tierCap} {entry.rank}</div>
+                          <div className="text-lg font-bold text-[#e8d5a3]">{tierCap} {entry.rank}</div>
                           <div className="text-sm text-[#c89b3c]">{entry.leaguePoints} LP</div>
                         </div>
                         <div className="text-right shrink-0">
